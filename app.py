@@ -9,7 +9,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import quote_plus
 from urllib.request import Request, urlopen
 
-APP_TITLE = "주식 속보 뉴스 이벤트 대시보드 v24 Lite Render"
+APP_TITLE = "주식 속보 뉴스 이벤트 대시보드 v25 Lite Render"
 HOST = "127.0.0.1"
 KST = timezone(timedelta(hours=9))
 
@@ -84,7 +84,7 @@ HTML = '''
 <html lang="ko">
 <head>
 <meta charset="utf-8">
-<title>주식 속보 뉴스 이벤트 대시보드 v24 Lite Render</title>
+<title>주식 속보 뉴스 이벤트 대시보드 v25 Lite Render</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <style>
 :root{--bg:#101418;--panel:#171d23;--line:#2b3542;--text:#e8edf2;--muted:#9fb0bf;--blue:#2f81f7;--chip:#26384d;--warn:#ffb86c;--err:#ff8585;--ok:#8aff8a}
@@ -140,7 +140,7 @@ button{background:var(--blue);color:white;border:0;border-radius:10px;padding:12
 <body>
 <div class="wrap">
 <div class="toolbar">
-<h1>📰 주식 속보 뉴스 이벤트 대시보드 v24 Lite Render</h1>
+<h1>📰 주식 속보 뉴스 이벤트 대시보드 v25 Lite Render</h1>
 <div class="desc">뉴스검색, 속보뉴스, 매크로만 남긴 경량화 버전입니다.</div>
 <div class="tabs">
   <button class="tabbtn active" onclick="showTab('searchTab', this)">뉴스검색</button>
@@ -224,6 +224,23 @@ window.onerror = function(message, source, lineno, colno, error){
 };
 const DEFAULT_KEYWORDS = __DEFAULT_KEYWORDS__;
 let LAST_DATA=null;
+
+
+async function fetchJson(url, options){
+  const res = await fetch(url, options);
+  const text = await res.text();
+  let data;
+  try{
+    data = JSON.parse(text);
+  }catch(e){
+    throw new Error("서버가 JSON이 아닌 응답을 반환했습니다: " + text.slice(0, 200));
+  }
+  if(!res.ok || data.ok === false){
+    throw new Error(data.error || ("HTTP " + res.status));
+  }
+  return data;
+}
+
 
 function init(){
   document.getElementById("extraKeywords").addEventListener("input", clearResultsOnly);
@@ -386,8 +403,7 @@ async function searchNews(){
   document.getElementById("newsSections").innerHTML="";
   document.getElementById("status").innerHTML="새 검색을 실행 중입니다...";
   try{
-    const res=await fetch("/api/search",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(getPayload())});
-    const data=await res.json();
+    const data=await fetchJson("/api/search",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(getPayload())});
     if(!data.ok){document.getElementById("summary").innerHTML=`<span class="err">${data.error}</span>`; btn.disabled=false; return;}
     LAST_DATA=data;
     document.getElementById("summary").innerHTML=renderSummary(data);
@@ -425,8 +441,7 @@ async function loadBreakingNews(){
   news.innerHTML="";
 
   try{
-    const res=await fetch(`/api/breaking?value=${encodeURIComponent(v)}&unit=${encodeURIComponent(u)}&max=${encodeURIComponent(m)}`);
-    const data=await res.json();
+    const data=await fetchJson(`/api/breaking?value=${encodeURIComponent(v)}&unit=${encodeURIComponent(u)}&max=${encodeURIComponent(m)}`);
     if(!data.ok){
       status.innerHTML=`<span class="err">${data.error || "속보 로드 실패"}</span>`;
       return;
@@ -515,8 +530,7 @@ async function loadMarketCharts(){
   status.innerHTML="매크로 데이터 불러오는 중...";
   grid.innerHTML="";
   try{
-    const res=await fetch("/api/market");
-    const data=await res.json();
+    const data=await fetchJson("/api/market");
     if(!data.ok){
       status.innerHTML=`<span class="err">${data.error || "매크로 데이터 오류"}</span>`;
       return;
@@ -1327,42 +1341,55 @@ def breaking_snapshot(period_value=12, period_unit="h", max_per_topic=20):
 class Handler(BaseHTTPRequestHandler):
     def send_content(self,status,content,ctype="text/html; charset=utf-8"):
         if isinstance(content,str): content=content.encode("utf-8")
-        self.send_response(status); self.send_header("Content-Type",ctype); self.send_header("Content-Length",str(len(content))); self.send_header("Cache-Control","no-store"); self.end_headers(); self.wfile.write(content)
+        self.send_response(status)
+        self.send_header("Content-Type",ctype)
+        self.send_header("Content-Length",str(len(content)))
+        self.send_header("Cache-Control","no-store")
+        self.end_headers()
+        self.wfile.write(content)
+
+    def send_json(self, status, payload):
+        try:
+            content = json.dumps(payload, ensure_ascii=False)
+        except Exception:
+            content = json.dumps({"ok": False, "error": "JSON encode failed"}, ensure_ascii=False)
+        self.send_content(status, content, "application/json; charset=utf-8")
+
     def do_GET(self):
-        if self.path=="/" or self.path.startswith("/index"):
-            self.send_content(200, HTML.replace("__DEFAULT_KEYWORDS__", json.dumps(DEFAULT_KEYWORDS,ensure_ascii=False)))
-        elif self.path.startswith("/api/market"):
-            try:
-                self.send_content(200, json.dumps(market_snapshot(), ensure_ascii=False), "application/json; charset=utf-8")
-            except Exception as e:
-                log_error(traceback.format_exc())
-                self.send_content(500, json.dumps({"ok": False, "error": str(e)}, ensure_ascii=False), "application/json; charset=utf-8")
-        elif self.path.startswith("/api/dictionary"):
-            try:
-                self.send_content(200, json.dumps({"ok": True, "data": load_event_dictionary()}, ensure_ascii=False), "application/json; charset=utf-8")
-            except Exception as e:
-                log_error(traceback.format_exc())
-                self.send_content(500, json.dumps({"ok": False, "error": str(e)}, ensure_ascii=False), "application/json; charset=utf-8")
-        elif self.path.startswith("/api/breaking"):
-            try:
+        try:
+            if self.path=="/" or self.path.startswith("/index"):
+                self.send_content(200, HTML.replace("__DEFAULT_KEYWORDS__", json.dumps(DEFAULT_KEYWORDS,ensure_ascii=False)))
+                return
+
+            if self.path.startswith("/api/market"):
+                self.send_json(200, market_snapshot())
+                return
+
+            if self.path.startswith("/api/dictionary"):
+                self.send_json(200, {"ok": True, "data": load_event_dictionary()})
+                return
+
+            if self.path.startswith("/api/breaking"):
                 from urllib.parse import urlparse, parse_qs
                 qs = parse_qs(urlparse(self.path).query)
                 pv = qs.get("value", ["12"])[0]
                 pu = qs.get("unit", ["h"])[0]
                 mr = qs.get("max", ["20"])[0]
-                self.send_content(200, json.dumps(breaking_snapshot(pv, pu, mr), ensure_ascii=False), "application/json; charset=utf-8")
-            except Exception as e:
-                log_error(traceback.format_exc())
-                self.send_content(500, json.dumps({"ok": False, "error": str(e)}, ensure_ascii=False), "application/json; charset=utf-8")
-        else:
+                self.send_json(200, breaking_snapshot(pv, pu, mr))
+                return
+
             self.send_content(404,"Not found","text/plain; charset=utf-8")
+        except Exception as e:
+            log_error(traceback.format_exc())
+            self.send_json(500, {"ok": False, "error": str(e), "trace": traceback.format_exc()})
+
     def do_POST(self):
         try:
             length=int(self.headers.get("Content-Length","0"))
             payload=json.loads(self.rfile.read(length).decode("utf-8") or "{}")
 
             if self.path == "/api/search":
-                self.send_content(200,json.dumps(search_all(payload),ensure_ascii=False),"application/json; charset=utf-8")
+                self.send_json(200, search_all(payload))
                 return
 
             if self.path == "/api/dictionary/add":
@@ -1372,12 +1399,14 @@ class Handler(BaseHTTPRequestHandler):
                     payload.get("impact",70),
                     payload.get("novelty",20)
                 )
-                self.send_content(200, json.dumps({"ok": True, "data": data}, ensure_ascii=False), "application/json; charset=utf-8")
+                self.send_json(200, {"ok": True, "data": data})
                 return
 
-            self.send_content(404,json.dumps({"ok":False,"error":"not found"},ensure_ascii=False),"application/json; charset=utf-8")
+            self.send_json(404, {"ok":False,"error":"not found","path":self.path})
         except Exception as e:
-            log_error(traceback.format_exc()); self.send_content(500,json.dumps({"ok":False,"error":str(e)},ensure_ascii=False),"application/json; charset=utf-8")
+            log_error(traceback.format_exc())
+            self.send_json(500, {"ok":False,"error":str(e), "trace": traceback.format_exc()})
+
     def log_message(self, fmt, *args): return
 
 def open_browser(url):
@@ -1388,8 +1417,6 @@ def open_browser(url):
 def main():
     os.chdir(app_dir())
 
-    # Render 배포 환경에서는 0.0.0.0:$PORT로 실행
-    # 로컬 실행에서는 기존처럼 빈 포트를 찾아 브라우저 자동 실행
     if os.environ.get("RENDER") or os.environ.get("PORT"):
         host = "0.0.0.0"
         port = int(os.environ.get("PORT", "10000"))
