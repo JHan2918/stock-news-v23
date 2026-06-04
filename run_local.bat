@@ -1,5 +1,5 @@
 @echo off
-title Stock News Event Core v24 Render Local
+title Stock News Event Dashboard v24 Lite Render Local
 cd /d "%~dp0"
 set PORT=8765
 

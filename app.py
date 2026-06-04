@@ -1,4 +1,3 @@
-import os
 
 # -*- coding: utf-8 -*-
 import json, os, re, socket, threading, time, traceback, webbrowser
@@ -10,7 +9,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import quote_plus
 from urllib.request import Request, urlopen
 
-APP_TITLE = "주식 속보 뉴스 이벤트 사전 엔진 v24 Render"
+APP_TITLE = "주식 속보 뉴스 이벤트 대시보드 v24 Lite Render"
 HOST = "127.0.0.1"
 KST = timezone(timedelta(hours=9))
 
@@ -85,12 +84,12 @@ HTML = '''
 <html lang="ko">
 <head>
 <meta charset="utf-8">
-<title>주식 속보 뉴스 이벤트 사전 엔진 v24 Render</title>
+<title>주식 속보 뉴스 이벤트 대시보드 v24 Lite Render</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <style>
 :root{--bg:#101418;--panel:#171d23;--line:#2b3542;--text:#e8edf2;--muted:#9fb0bf;--blue:#2f81f7;--chip:#26384d;--warn:#ffb86c;--err:#ff8585;--ok:#8aff8a}
 body{font-family:"Malgun Gothic",Arial,sans-serif;margin:0;background:var(--bg);color:var(--text)}
-.wrap{max-width:1280px;margin:0 auto;padding:24px}
+.wrap{max-width:1600px;margin:0 auto;padding:24px}
 h1{margin:0 0 8px;font-size:28px}.desc{color:var(--muted);margin-bottom:18px}.box{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:16px;margin-bottom:16px}
 .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(126px,1fr));gap:8px}
 label.kw{background:#202832;border:1px solid #344151;border-radius:10px;padding:8px 10px;cursor:pointer;display:block}
@@ -141,13 +140,12 @@ button{background:var(--blue);color:white;border:0;border-radius:10px;padding:12
 <body>
 <div class="wrap">
 <div class="toolbar">
-<h1>📰 주식 속보 뉴스 이벤트 사전 엔진 v24 Render</h1>
-<div class="desc">뉴스 검색, 속보, 매크로, 이벤트 사전을 한 화면에서 보는 주식 투자 보조 대시보드입니다.</div>
+<h1>📰 주식 속보 뉴스 이벤트 대시보드 v24 Lite Render</h1>
+<div class="desc">뉴스검색, 속보뉴스, 매크로만 남긴 경량화 버전입니다.</div>
 <div class="tabs">
   <button class="tabbtn active" onclick="showTab('searchTab', this)">뉴스검색</button>
   <button class="tabbtn" onclick="showTab('breakingTab', this); loadBreakingNews();">속보뉴스</button>
   <button class="tabbtn" onclick="showTab('macroTab', this)">매크로</button>
-  <button class="tabbtn" onclick="showTab('dictTab', this)">이벤트사전</button>
 </div>
 </div>
 
@@ -172,19 +170,10 @@ button{background:var(--blue);color:white;border:0;border-radius:10px;padding:12
 
 
 
-<div class="box">
-<h2>🏷️ 기본 키워드 선택</h2>
-<div class="grid" id="keywordGrid"></div>
-</div>
-
-
-
-
 
 <div class="box"><h2>🧾 검색 요약</h2><div id="summary" class="meta">아직 검색 전입니다.</div></div>
-<div class="box"><h2>🧩 이슈 카드</h2><div id="cards" class="cardgrid"></div></div>
 <div class="box"><h2>🕸️ 키워드 연결 그래프</h2><div class='meta'>노랑=핵심/종목/시장 키워드, 초록=신규 테마 후보, 파랑=후보 키워드. 글씨 크기는 고정. Kiwi ON이면 명사 중심 추출.</div><div id="graph" class="graph"><div class="meta" style="padding:16px">검색 후 표시됩니다.</div></div></div>
-<div class="box"><h2>📰 뉴스 제목</h2><div id="status" class="meta">검색 전입니다. 위 카드나 그래프 노드를 클릭하면 관련 뉴스가 펼쳐집니다.</div><div id="newsSections"></div></div>
+<div class="box"><h2>📰 뉴스 제목</h2><div id="status" class="meta">검색 전입니다. 검색 요약이나 그래프 노드를 클릭하면 관련 뉴스가 펼쳐집니다.</div><div id="newsSections"></div></div>
 
 </div>
 
@@ -219,29 +208,13 @@ button{background:var(--blue);color:white;border:0;border-radius:10px;padding:12
 <h2>📈 매크로 그래프</h2>
 <div class="row">
 <button onclick="loadMarketCharts()" style="background:#246b45">매크로 그래프 새로고침</button>
-<span class="meta">달러지수 / 원달러환율 / 미국10년물 국채금리 / WTI 유가 / 금, 최근 30일</span>
+<span class="meta">나스닥 / 달러지수 / 원달러환율 / 미국10년물 국채금리 / WTI 유가 / 금, 최근 30일</span>
 </div>
 <div id="marketStatus" class="meta" style="margin-top:10px">아직 불러오기 전입니다.</div>
 <div id="marketGrid" class="marketgrid"></div>
 </div>
 </div>
 
-<div id="dictTab" class="tabcontent">
-<div class="box">
-<h2>📚 이벤트 사전 관리</h2>
-<div class="meta">새로 발견한 주식 이벤트 키워드를 JSON 사전에 추가합니다. 다음 검색부터 바로 반영됩니다.</div><br>
-<div class="row">
-<input id="dictCategory" type="text" placeholder="카테고리 예: 주주환원" style="width:180px">
-<input id="dictKeyword" type="text" placeholder="키워드 예: 자사주 소각" style="width:220px">
-<input id="dictImpact" type="number" min="0" max="100" value="80" title="중요도" style="width:90px">
-<input id="dictNovelty" type="number" min="0" max="100" value="20" title="신규성" style="width:90px">
-<button onclick="addDictionaryKeyword()" style="background:#7a4cc2">사전에 추가</button>
-<button onclick="loadDictionary()" style="background:#555">사전 보기</button>
-</div>
-<div id="dictStatus" class="meta" style="margin-top:10px">사전 준비 완료.</div>
-<div id="dictPreview" class="meta" style="margin-top:10px"></div>
-</div>
-</div>
 </div>
 
 <script>
@@ -253,21 +226,13 @@ const DEFAULT_KEYWORDS = __DEFAULT_KEYWORDS__;
 let LAST_DATA=null;
 
 function init(){
-  const grid=document.getElementById("keywordGrid");
-  DEFAULT_KEYWORDS.forEach(kw=>{
-    const lab=document.createElement("label"); lab.className="kw";
-    const input=document.createElement("input"); input.type="checkbox"; input.value=kw;
-    lab.appendChild(input); lab.appendChild(document.createTextNode(" "+kw)); grid.appendChild(lab);
-  });
   document.getElementById("extraKeywords").addEventListener("input", clearResultsOnly);
   document.getElementById("periodValue").addEventListener("change", clearResultsOnly);
   document.getElementById("periodUnit").addEventListener("change", clearResultsOnly);
   document.getElementById("maxResults").addEventListener("change", clearResultsOnly);
   document.getElementById("sortBy").addEventListener("change", clearResultsOnly);
-  document.querySelectorAll("#keywordGrid input").forEach(x=>x.addEventListener("change", clearResultsOnly));
   document.getElementById("summary").innerHTML="<span class='ok'>준비 완료. 조건을 입력하고 검색하세요.</span>";
   loadMarketCharts();
-  loadDictionary();
 }
 
 function getPayload(){
@@ -276,17 +241,15 @@ function getPayload(){
     periodUnit: document.getElementById("periodUnit").value,
     maxResults: document.getElementById("maxResults").value,
     sortBy: document.getElementById("sortBy").value,
-    checkedKeywords:[...document.querySelectorAll("#keywordGrid input:checked")].map(x=>x.value),
+    checkedKeywords:[],
     extraKeywords: document.getElementById("extraKeywords").value
   };
 }
 
 function clearAll(){
   LAST_DATA = null;
-  document.querySelectorAll("#keywordGrid input").forEach(x=>x.checked=false);
   document.getElementById("extraKeywords").value="";
   document.getElementById("summary").innerHTML="<span class='ok'>초기화 완료.</span>";
-  document.getElementById("cards").innerHTML="";
   document.getElementById("graph").innerHTML="<div class='meta' style='padding:16px'>검색 후 표시됩니다.</div>";
   document.getElementById("newsSections").innerHTML="";
   document.getElementById("status").textContent="검색 전입니다.";
@@ -295,7 +258,6 @@ function clearAll(){
 function clearResultsOnly(){
   LAST_DATA = null;
   document.getElementById("summary").innerHTML = "<span class='warn'>검색 조건이 변경되었습니다. 다시 검색하세요.</span>";
-  document.getElementById("cards").innerHTML = "";
   document.getElementById("graph").innerHTML = "<div class='meta' style='padding:16px'>검색 후 표시됩니다.</div>";
   document.getElementById("newsSections").innerHTML = "";
   document.getElementById("status").textContent = "새 검색 조건입니다. 뉴스 검색 실행을 누르세요.";
@@ -319,26 +281,6 @@ function bindSummaryButtons(){
         toggleGroup(LAST_DATA.groups[idx].label);
       }
     });
-  });
-}
-
-function renderCards(data){
-  const el=document.getElementById("cards"); el.innerHTML="";
-
-  // 검색어 묶음 자체를 먼저 카드로 표시. 예: 보령 49건
-  data.groups.forEach(g=>{
-    const pg=data.perGroup[g.label];
-    const div=document.createElement("div"); div.className="card";
-    div.onclick=()=>toggleGroup(g.label);
-    div.innerHTML=`<div class="label">검색어: ${g.label}</div><div class="num">${pg.count}</div><div class="sub">전체 뉴스 펼치기</div>`;
-    el.appendChild(div);
-  });
-
-  data.keywordStats.slice(0,24).forEach(k=>{
-    const div=document.createElement("div"); div.className="card";
-    div.onclick=()=>showKeywordNews(k.keyword);
-    div.innerHTML=`<div class="label">${k.keyword}</div><div class="num">${k.count}</div><div class="sub">관련 뉴스 ${k.count}건 / 시장점수 ${k.marketScore} / ${k.category ? k.category + " / " : ""}${k.kind}</div>`;
-    el.appendChild(div);
   });
 }
 
@@ -376,7 +318,7 @@ function renderGraph(data){
 
 function renderNewsSections(data){
   const el=document.getElementById("newsSections");
-  el.innerHTML="<div class='meta'>검색 요약 버튼, 이슈 카드, 또는 그래프 노드를 클릭하면 관련 뉴스가 여기에 표시됩니다.</div>";
+  el.innerHTML="<div class='meta'>검색 요약 버튼 또는 그래프 노드를 클릭하면 관련 뉴스가 여기에 표시됩니다.</div>";
 }
 
 function toggleGroup(label){
@@ -440,7 +382,6 @@ async function searchNews(){
   // 새 검색 시작 시 이전 검색 데이터와 화면을 완전히 초기화
   LAST_DATA = null;
   document.getElementById("summary").innerHTML="검색 중...";
-  document.getElementById("cards").innerHTML="";
   document.getElementById("graph").innerHTML="<div class='meta' style='padding:16px'>그래프 생성 중...</div>";
   document.getElementById("newsSections").innerHTML="";
   document.getElementById("status").innerHTML="새 검색을 실행 중입니다...";
@@ -451,70 +392,10 @@ async function searchNews(){
     LAST_DATA=data;
     document.getElementById("summary").innerHTML=renderSummary(data);
     bindSummaryButtons();
-    renderCards(data); renderGraph(data); renderNewsSections(data);
-    document.getElementById("status").innerHTML="<span class='ok'>검색 완료. 카드/그래프 노드를 클릭하면 관련 뉴스가 펼쳐집니다.</span>";
+    renderGraph(data); renderNewsSections(data);
+    document.getElementById("status").innerHTML="<span class='ok'>검색 완료. 요약 버튼/그래프 노드를 클릭하면 관련 뉴스가 펼쳐집니다.</span>";
   }catch(e){document.getElementById("summary").innerHTML=`<span class="err">오류: ${e.message}</span>`;}
   btn.disabled=false;
-}
-
-
-
-async function loadDictionary(){
-  const status=document.getElementById("dictStatus");
-  const preview=document.getElementById("dictPreview");
-  if(!status || !preview) return;
-  status.innerHTML="사전 불러오는 중...";
-  try{
-    const res=await fetch("/api/dictionary");
-    const data=await res.json();
-    if(!data.ok){
-      status.innerHTML=`<span class="err">${data.error || "사전 로드 실패"}</span>`;
-      return;
-    }
-    const cats=Object.keys(data.data || {});
-    let html=`카테고리 ${cats.length}개<br>`;
-    cats.slice(0,12).forEach(cat=>{
-      const info=data.data[cat];
-      const kws=(info.keywords||[]).slice(0,10).join(", ");
-      html+=`<b>${escapeHtml(cat)}</b> (${(info.keywords||[]).length}개): ${escapeHtml(kws)}<br>`;
-    });
-    preview.innerHTML=html;
-    status.innerHTML="<span class='ok'>사전 로드 완료.</span>";
-  }catch(e){
-    status.innerHTML=`<span class="err">사전 오류: ${e.message}</span>`;
-  }
-}
-
-async function addDictionaryKeyword(){
-  const category=document.getElementById("dictCategory").value.trim();
-  const keyword=document.getElementById("dictKeyword").value.trim();
-  const impact=document.getElementById("dictImpact").value;
-  const novelty=document.getElementById("dictNovelty").value;
-  const status=document.getElementById("dictStatus");
-
-  if(!category || !keyword){
-    status.innerHTML="<span class='warn'>카테고리와 키워드를 입력하세요.</span>";
-    return;
-  }
-
-  status.innerHTML="사전에 저장 중...";
-  try{
-    const res=await fetch("/api/dictionary/add",{
-      method:"POST",
-      headers:{"Content-Type":"application/json"},
-      body:JSON.stringify({category,keyword,impact,novelty})
-    });
-    const data=await res.json();
-    if(!data.ok){
-      status.innerHTML=`<span class="err">${data.error || "저장 실패"}</span>`;
-      return;
-    }
-    status.innerHTML=`<span class="ok">저장 완료: ${escapeHtml(category)} / ${escapeHtml(keyword)}</span>`;
-    document.getElementById("dictKeyword").value="";
-    loadDictionary();
-  }catch(e){
-    status.innerHTML=`<span class="err">저장 오류: ${e.message}</span>`;
-  }
 }
 
 
@@ -1108,6 +989,7 @@ def yahoo_chart(symbol, days=30, interval="1d"):
 
 def market_snapshot():
     symbols = [
+        {"key": "nasdaq", "name": "나스닥", "symbol": "^IXIC", "days": 30, "unit": ""},
         {"key": "dxy", "name": "달러지수", "symbol": "DX-Y.NYB", "days": 30, "unit": ""},
         {"key": "usdkrw", "name": "원달러환율", "symbol": "KRW=X", "days": 30, "unit": "원"},
         {"key": "us10y", "name": "미국10년물 국채금리", "symbol": "^TNX", "days": 30, "unit": "%"},
@@ -1506,8 +1388,8 @@ def open_browser(url):
 def main():
     os.chdir(app_dir())
 
-    # Render 배포 환경에서는 반드시 0.0.0.0:$PORT로 열어야 한다.
-    # 로컬 실행에서는 기존처럼 빈 포트를 찾아서 브라우저를 연다.
+    # Render 배포 환경에서는 0.0.0.0:$PORT로 실행
+    # 로컬 실행에서는 기존처럼 빈 포트를 찾아 브라우저 자동 실행
     if os.environ.get("RENDER") or os.environ.get("PORT"):
         host = "0.0.0.0"
         port = int(os.environ.get("PORT", "10000"))
