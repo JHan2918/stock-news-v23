@@ -1,6 +1,6 @@
 
 # -*- coding: utf-8 -*-
-import json, os, re, socket, threading, time, traceback, webbrowser
+import json, os, re, socket, threading, time, traceback, webbrowser, sqlite3
 import xml.etree.ElementTree as ET
 from datetime import datetime, timedelta, timezone
 from email.utils import parsedate_to_datetime
@@ -134,6 +134,11 @@ button{background:var(--blue);color:white;border:0;border-radius:10px;padding:12
 .tabcontent.active{display:block}
 .topiccard{background:#202832;border:1px solid #344151;border-radius:12px;padding:12px;cursor:pointer}
 .topiccard:hover{background:#283241}
+.topicrow{display:grid;grid-template-columns:1.1fr 2.2fr 72px 60px 60px;gap:8px;align-items:center;border-bottom:1px solid #344151;padding:8px 0}
+.topicrow input{width:100%;padding:8px;font-size:13px}
+.topicrow .topicname{font-weight:bold;color:#d7e7ff}
+.topicrow .topicquery{font-size:12px;color:#9fb0bf;word-break:break-all}
+@media(max-width:850px){.topicrow{grid-template-columns:1fr}.topicrow button{width:max-content}}
 
 
 
@@ -153,7 +158,7 @@ button{background:var(--blue);color:white;border:0;border-radius:10px;padding:12
 <div class="desc">뉴스 검색, 속보, 매크로, 이벤트 사전을 한 화면에서 보는 주식 투자 보조 대시보드입니다.</div>
 <div class="tabs">
   <button class="tabbtn active" onclick="showTab('searchTab', this)">뉴스검색</button>
-  <button class="tabbtn" onclick="showTab('breakingTab', this); loadBreakingNews();">속보뉴스</button>
+  <button class="tabbtn" onclick="showTab('breakingTab', this); loadBreakingTopicSettings(); loadBreakingNews();">속보뉴스</button>
   <button class="tabbtn" onclick="showTab('macroTab', this)">매크로</button>
   <button class="tabbtn" onclick="showTab('exportTab', this); loadExportDashboard(false);">산업데이터</button>
   <button class="tabbtn" onclick="showTab('dictTab', this)">이벤트사전</button>
@@ -205,12 +210,24 @@ button{background:var(--blue);color:white;border:0;border-radius:10px;padding:12
 <select id="breakingUnit"><option value="h" selected>시간</option><option value="d">일</option><option value="w">주</option></select>
 <select id="breakingMax"><option value="10">주제별 10개</option><option value="20" selected>주제별 20개</option><option value="50">주제별 50개</option></select>
 <button onclick="loadBreakingNews()" style="background:#246b45">속보 새로고침</button>
-<span class="meta">주제별 뉴스 건수는 미리 정한 검색 묶음별 수집 건수입니다. 시장 강도 판단은 아직 아닙니다.</span>
+<span class="meta">내 주제에 등록된 검색식 기준으로 속보를 수집합니다. 주제는 아래에서 추가·수정·삭제할 수 있습니다.</span>
 </div>
-<div id="breakingStatus" class="meta" style="margin-top:10px">속보 탭을 열면 요약 카드만 먼저 표시됩니다. 카드를 클릭하면 뉴스가 펼쳐집니다.</div>
+<div id="breakingStatus" class="meta" style="margin-top:10px">속보 탭을 열면 내 주제별 요약 카드가 먼저 표시됩니다. 카드를 클릭하면 뉴스가 펼쳐집니다.</div>
 </div>
 <div class="box">
-<h2>📊 주제별 뉴스 건수</h2>
+<h2>⚙️ 내 주제 관리</h2>
+<div class="meta">주제 이름과 실제 검색식을 관리합니다. 예: 이름=MLCC, 검색식=MLCC OR 적층세라믹콘덴서 OR 삼성전기</div><br>
+<div class="row">
+<input id="newTopicName" type="text" placeholder="주제명 예: MLCC" style="width:180px">
+<input id="newTopicQuery" type="text" placeholder="검색식 예: MLCC OR 삼성전기" style="width:420px">
+<button onclick="addBreakingTopic()" style="background:#7a4cc2">주제 추가</button>
+<button onclick="resetBreakingTopics()" style="background:#555">기본 주제 복원</button>
+</div>
+<div id="topicManageStatus" class="meta" style="margin-top:8px">주제 목록을 불러오는 중입니다.</div>
+<div id="topicManageList" style="margin-top:8px"></div>
+</div>
+<div class="box">
+<h2>📊 내 주제별 뉴스 건수</h2>
 <div id="breakingTopics" class="cardgrid"></div>
 </div>
 <div class="box">
@@ -219,7 +236,7 @@ button{background:var(--blue);color:white;border:0;border-radius:10px;padding:12
 </div>
 <div class="box">
 <h2>📰 선택한 속보 뉴스</h2>
-<div id="breakingNews" class="meta">주제별 뉴스 건수 또는 속보 키워드를 클릭하면 관련 뉴스가 여기에 표시됩니다.</div>
+<div id="breakingNews" class="meta">내 주제별 뉴스 건수 또는 속보 키워드를 클릭하면 관련 뉴스가 여기에 표시됩니다.</div>
 </div>
 </div>
 
@@ -333,6 +350,7 @@ function init(){
   document.getElementById("summary").innerHTML="<span class='ok'>준비 완료. 조건을 입력하고 검색하세요.</span>";
   loadMarketCharts();
   loadDictionary();
+  loadBreakingTopicSettings();
 }
 
 function getPayload(){
@@ -592,6 +610,91 @@ function showTab(tabId, btn){
   if(btn) btn.classList.add("active");
 }
 
+
+async function loadBreakingTopicSettings(){
+  const list=document.getElementById("topicManageList");
+  const status=document.getElementById("topicManageStatus");
+  if(!list || !status) return;
+  status.innerHTML="주제 목록 불러오는 중...";
+  try{
+    const res=await fetch("/api/breaking-topics?ts="+Date.now());
+    const data=await res.json();
+    if(!data.ok){status.innerHTML=`<span class="err">${escapeHtml(data.error||"주제 로드 실패")}</span>`; return;}
+    const topics=data.topics||[];
+    if(!topics.length){list.innerHTML="<div class='emptybox'>등록된 주제가 없습니다. 기본 주제 복원 또는 새 주제를 추가하세요.</div>";}
+    else{
+      list.innerHTML=topics.map(t=>`
+        <div class="topicrow">
+          <div class="topicname">${escapeHtml(t.name)}</div>
+          <div class="topicquery">${escapeHtml(t.query)}</div>
+          <div><span class="badge">우선 ${t.priority||3}</span></div>
+          <button onclick="editBreakingTopic(${t.id}, '${escapeJs(t.name)}', '${escapeJs(t.query)}', ${t.priority||3})" style="padding:7px 9px;font-size:12px;background:#555">수정</button>
+          <button onclick="deleteBreakingTopic(${t.id}, '${escapeJs(t.name)}')" style="padding:7px 9px;font-size:12px;background:#7d2b2b">삭제</button>
+        </div>`).join("");
+    }
+    status.innerHTML=`<span class='ok'>내 주제 ${topics.length}개 로드 완료.</span>`;
+  }catch(e){status.innerHTML=`<span class="err">주제 로드 오류: ${escapeHtml(e.message)}</span>`;}
+}
+
+async function addBreakingTopic(){
+  const name=document.getElementById("newTopicName").value.trim();
+  const query=document.getElementById("newTopicQuery").value.trim();
+  const status=document.getElementById("topicManageStatus");
+  if(!name || !query){status.innerHTML="<span class='warn'>주제명과 검색식을 입력하세요.</span>"; return;}
+  try{
+    const res=await fetch("/api/breaking-topics/add", {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({name, query, priority:3})});
+    const data=await res.json();
+    if(!data.ok){status.innerHTML=`<span class='err'>${escapeHtml(data.error||"저장 실패")}</span>`; return;}
+    document.getElementById("newTopicName").value="";
+    document.getElementById("newTopicQuery").value="";
+    await loadBreakingTopicSettings();
+    await loadBreakingNews();
+  }catch(e){status.innerHTML=`<span class='err'>저장 오류: ${escapeHtml(e.message)}</span>`;}
+}
+
+async function editBreakingTopic(id, oldName, oldQuery, oldPriority){
+  const name=prompt("주제명", oldName); if(name===null) return;
+  const query=prompt("검색식", oldQuery); if(query===null) return;
+  const priorityText=prompt("우선순위 1~5, 1이 가장 높음", String(oldPriority||3)); if(priorityText===null) return;
+  const priority=parseInt(priorityText,10)||3;
+  const status=document.getElementById("topicManageStatus");
+  try{
+    const res=await fetch("/api/breaking-topics/update", {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({id, name:name.trim(), query:query.trim(), priority})});
+    const data=await res.json();
+    if(!data.ok){status.innerHTML=`<span class='err'>${escapeHtml(data.error||"수정 실패")}</span>`; return;}
+    await loadBreakingTopicSettings();
+    await loadBreakingNews();
+  }catch(e){status.innerHTML=`<span class='err'>수정 오류: ${escapeHtml(e.message)}</span>`;}
+}
+
+async function deleteBreakingTopic(id, name){
+  if(!confirm(`'${name}' 주제를 삭제할까요?`)) return;
+  const status=document.getElementById("topicManageStatus");
+  try{
+    const res=await fetch("/api/breaking-topics/delete", {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({id})});
+    const data=await res.json();
+    if(!data.ok){status.innerHTML=`<span class='err'>${escapeHtml(data.error||"삭제 실패")}</span>`; return;}
+    await loadBreakingTopicSettings();
+    await loadBreakingNews();
+  }catch(e){status.innerHTML=`<span class='err'>삭제 오류: ${escapeHtml(e.message)}</span>`;}
+}
+
+async function resetBreakingTopics(){
+  if(!confirm("기본 주제로 복원할까요? 현재 주제 목록은 초기화됩니다.")) return;
+  const status=document.getElementById("topicManageStatus");
+  try{
+    const res=await fetch("/api/breaking-topics/reset", {method:"POST", headers:{"Content-Type":"application/json"}, body:"{}"});
+    const data=await res.json();
+    if(!data.ok){status.innerHTML=`<span class='err'>${escapeHtml(data.error||"복원 실패")}</span>`; return;}
+    await loadBreakingTopicSettings();
+    await loadBreakingNews();
+  }catch(e){status.innerHTML=`<span class='err'>복원 오류: ${escapeHtml(e.message)}</span>`;}
+}
+
+function escapeJs(s){
+  return String(s||"").replace(/\\/g,"\\\\").replace(/'/g,"\\'").replace(/\n/g," ").replace(/\r/g," ");
+}
+
 async function loadBreakingNews(){
   const status=document.getElementById("breakingStatus");
   const topics=document.getElementById("breakingTopics");
@@ -638,7 +741,7 @@ async function loadBreakingNews(){
       keywords.appendChild(div);
     });
 
-    news.innerHTML="<div class='meta'>주제별 뉴스 건수 또는 속보 키워드를 클릭하면 관련 뉴스가 여기에 표시됩니다.</div>";
+    news.innerHTML="<div class='meta'>내 주제별 뉴스 건수 또는 속보 키워드를 클릭하면 관련 뉴스가 여기에 표시됩니다.</div>";
   }catch(e){
     status.innerHTML=`<span class="err">속보 오류: ${e.message}</span>`;
   }
@@ -1619,6 +1722,107 @@ BREAKING_TOPICS = [
 ]
 
 
+def breaking_topics_db_path():
+    # Render Disk를 쓰는 경우 TOPICS_DB_PATH 환경변수로 영구 경로를 지정할 수 있습니다.
+    # 없으면 앱 폴더의 topics.db를 사용합니다.
+    return os.environ.get("TOPICS_DB_PATH") or os.path.join(app_dir(), "topics.db")
+
+def default_breaking_topics():
+    return list(BREAKING_TOPICS)
+
+def init_breaking_topics_db(reset=False):
+    path = breaking_topics_db_path()
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    con = sqlite3.connect(path)
+    try:
+        con.execute("CREATE TABLE IF NOT EXISTS breaking_topics (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT UNIQUE NOT NULL, query TEXT NOT NULL, enabled INTEGER DEFAULT 1, priority INTEGER DEFAULT 3, created_at TEXT, updated_at TEXT)")
+        cnt = con.execute("SELECT COUNT(*) FROM breaking_topics").fetchone()[0]
+        if reset:
+            con.execute("DELETE FROM breaking_topics")
+            cnt = 0
+        if cnt == 0:
+            now = datetime.now(KST).strftime("%Y-%m-%d %H:%M:%S")
+            for idx, t in enumerate(default_breaking_topics(), 1):
+                con.execute("INSERT OR IGNORE INTO breaking_topics(name, query, enabled, priority, created_at, updated_at) VALUES(?,?,?,?,?,?)", (t["name"], t["query"], 1, min(5, max(1, idx)), now, now))
+        con.commit()
+    finally:
+        con.close()
+
+def load_breaking_topics(include_disabled=False):
+    init_breaking_topics_db(False)
+    con = sqlite3.connect(breaking_topics_db_path())
+    con.row_factory = sqlite3.Row
+    try:
+        if include_disabled:
+            rows = con.execute("SELECT id,name,query,enabled,priority FROM breaking_topics ORDER BY priority ASC, id ASC").fetchall()
+        else:
+            rows = con.execute("SELECT id,name,query,enabled,priority FROM breaking_topics WHERE enabled=1 ORDER BY priority ASC, id ASC").fetchall()
+        return [dict(r) for r in rows]
+    finally:
+        con.close()
+
+def add_breaking_topic(name, query, priority=3):
+    name = re.sub(r"\s+", " ", str(name or "")).strip()
+    query = re.sub(r"\s+", " ", str(query or "")).strip()
+    try:
+        priority = int(priority)
+    except Exception:
+        priority = 3
+    priority = max(1, min(priority, 5))
+    if not name or not query:
+        raise ValueError("주제명과 검색식을 입력하세요.")
+    init_breaking_topics_db(False)
+    now = datetime.now(KST).strftime("%Y-%m-%d %H:%M:%S")
+    con = sqlite3.connect(breaking_topics_db_path())
+    try:
+        con.execute("INSERT INTO breaking_topics(name, query, enabled, priority, created_at, updated_at) VALUES(?,?,?,?,?,?)", (name, query, 1, priority, now, now))
+        con.commit()
+    finally:
+        con.close()
+    return load_breaking_topics(True)
+
+def update_breaking_topic(topic_id, name, query, priority=3):
+    name = re.sub(r"\s+", " ", str(name or "")).strip()
+    query = re.sub(r"\s+", " ", str(query or "")).strip()
+    try:
+        topic_id = int(topic_id)
+        priority = int(priority)
+    except Exception:
+        raise ValueError("잘못된 주제 ID 또는 우선순위입니다.")
+    priority = max(1, min(priority, 5))
+    if not name or not query:
+        raise ValueError("주제명과 검색식을 입력하세요.")
+    init_breaking_topics_db(False)
+    now = datetime.now(KST).strftime("%Y-%m-%d %H:%M:%S")
+    con = sqlite3.connect(breaking_topics_db_path())
+    try:
+        cur = con.execute("UPDATE breaking_topics SET name=?, query=?, priority=?, updated_at=? WHERE id=?", (name, query, priority, now, topic_id))
+        if cur.rowcount == 0:
+            raise ValueError("수정할 주제를 찾지 못했습니다.")
+        con.commit()
+    finally:
+        con.close()
+    return load_breaking_topics(True)
+
+def delete_breaking_topic(topic_id):
+    try:
+        topic_id = int(topic_id)
+    except Exception:
+        raise ValueError("잘못된 주제 ID입니다.")
+    init_breaking_topics_db(False)
+    con = sqlite3.connect(breaking_topics_db_path())
+    try:
+        con.execute("DELETE FROM breaking_topics WHERE id=?", (topic_id,))
+        con.commit()
+    finally:
+        con.close()
+    return load_breaking_topics(True)
+
+def reset_breaking_topics():
+    init_breaking_topics_db(True)
+    return load_breaking_topics(True)
+
+
 def search_google_breaking(topic_name, query, period_when="1d", max_results=30):
     url = "https://news.google.com/rss/search?q=" + quote_plus(query + f" when:{period_when}") + "&hl=ko&gl=KR&ceid=KR:ko"
     data = http_get(url)
@@ -1689,7 +1893,7 @@ def breaking_snapshot(period_value=12, period_unit="h", max_per_topic=20):
     all_items = []
     errors = []
 
-    for t in BREAKING_TOPICS:
+    for t in load_breaking_topics():
         try:
             items = search_google_breaking(t["name"], t["query"], period_when, max_per_topic)
             items = dedupe_breaking_items(items)
@@ -2041,6 +2245,12 @@ class Handler(BaseHTTPRequestHandler):
             except Exception as e:
                 log_error(traceback.format_exc())
                 self.send_content(500, json.dumps({"ok": False, "error": str(e)}, ensure_ascii=False), "application/json; charset=utf-8")
+        elif self.path.startswith("/api/breaking-topics"):
+            try:
+                self.send_content(200, json.dumps({"ok": True, "topics": load_breaking_topics(True)}, ensure_ascii=False), "application/json; charset=utf-8")
+            except Exception as e:
+                log_error(traceback.format_exc())
+                self.send_content(500, json.dumps({"ok": False, "error": str(e)}, ensure_ascii=False), "application/json; charset=utf-8")
         elif self.path.startswith("/api/breaking"):
             try:
                 from urllib.parse import urlparse, parse_qs
@@ -2061,6 +2271,26 @@ class Handler(BaseHTTPRequestHandler):
 
             if self.path == "/api/search":
                 self.send_content(200,json.dumps(search_all(payload),ensure_ascii=False),"application/json; charset=utf-8")
+                return
+
+            if self.path == "/api/breaking-topics/add":
+                data = add_breaking_topic(payload.get("name",""), payload.get("query",""), payload.get("priority",3))
+                self.send_content(200, json.dumps({"ok": True, "topics": data}, ensure_ascii=False), "application/json; charset=utf-8")
+                return
+
+            if self.path == "/api/breaking-topics/update":
+                data = update_breaking_topic(payload.get("id"), payload.get("name",""), payload.get("query",""), payload.get("priority",3))
+                self.send_content(200, json.dumps({"ok": True, "topics": data}, ensure_ascii=False), "application/json; charset=utf-8")
+                return
+
+            if self.path == "/api/breaking-topics/delete":
+                data = delete_breaking_topic(payload.get("id"))
+                self.send_content(200, json.dumps({"ok": True, "topics": data}, ensure_ascii=False), "application/json; charset=utf-8")
+                return
+
+            if self.path == "/api/breaking-topics/reset":
+                data = reset_breaking_topics()
+                self.send_content(200, json.dumps({"ok": True, "topics": data}, ensure_ascii=False), "application/json; charset=utf-8")
                 return
 
             if self.path == "/api/dictionary/add":
