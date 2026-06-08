@@ -10,7 +10,7 @@ from urllib.parse import quote_plus
 from urllib.request import Request, urlopen
 
 APP_TITLE = "주식 속보 뉴스 이벤트 사전 엔진 v23 + 산업데이터"
-HOST = os.environ.get("HOST", "0.0.0.0" if os.environ.get("PORT") else "127.0.0.1")
+HOST = os.environ.get("HOST", "127.0.0.1")
 KST = timezone(timedelta(hours=9))
 
 # Kiwi 형태소 분석기는 선택 기능입니다.
@@ -135,6 +135,13 @@ button{background:var(--blue);color:white;border:0;border-radius:10px;padding:12
 .topiccard{background:#202832;border:1px solid #344151;border-radius:12px;padding:12px;cursor:pointer}
 .topiccard:hover{background:#283241}
 
+.topic-manager{display:grid;grid-template-columns:1.1fr 2fr 90px auto;gap:8px;align-items:center;margin-top:8px}
+.topic-manager input{width:100%}
+.topic-list{margin-top:12px;display:grid;gap:8px}
+.topic-row{display:grid;grid-template-columns:1fr 2.2fr 80px auto;gap:8px;align-items:center;background:#202832;border:1px solid #344151;border-radius:10px;padding:8px}
+.topic-row .topic-name{font-weight:bold;color:#d7e7ff}.topic-row .topic-query{font-size:13px;color:#9fb0bf}.topic-actions button{padding:6px 9px;font-size:12px;margin-left:4px}
+@media(max-width:900px){.topic-manager,.topic-row{grid-template-columns:1fr}.topic-actions button{margin:3px 3px 0 0}}
+
 
 
 .export-hero{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px;margin-top:10px}
@@ -204,13 +211,29 @@ button{background:var(--blue);color:white;border:0;border-radius:10px;padding:12
 <input id="breakingValue" type="number" min="1" max="30" value="12">
 <select id="breakingUnit"><option value="h" selected>시간</option><option value="d">일</option><option value="w">주</option></select>
 <select id="breakingMax"><option value="10">주제별 10개</option><option value="20" selected>주제별 20개</option><option value="50">주제별 50개</option></select>
-<button onclick="loadBreakingNews()" style="background:#246b45">속보 새로고침</button>
-<span class="meta">주제별 뉴스 건수는 미리 정한 검색 묶음별 수집 건수입니다. 시장 강도 판단은 아직 아닙니다.</span>
+<button onclick="loadBreakingNews()" style="background:#246b45">내 주제 속보 새로고침</button>
+<button onclick="toggleTopicManager()" style="background:#555">⚙ 내 주제 관리</button>
+<span class="meta">주제별 뉴스 건수는 내가 등록한 주제 기준입니다. 같은 제목/링크 뉴스는 중복 제거됩니다.</span>
 </div>
-<div id="breakingStatus" class="meta" style="margin-top:10px">속보 탭을 열면 요약 카드만 먼저 표시됩니다. 카드를 클릭하면 뉴스가 펼쳐집니다.</div>
+<div id="breakingStatus" class="meta" style="margin-top:10px">속보 탭을 열면 내 주제 요약 카드가 표시됩니다. 카드를 클릭하면 뉴스가 펼쳐집니다.</div>
+</div>
+<div id="topicManagerBox" class="box hidden">
+<h2>⚙ 내 속보 주제 관리</h2>
+<div class="meta">화면에 보일 이름과 실제 검색식을 분리합니다. 예: 이름=MLCC, 검색식=MLCC OR 적층세라믹콘덴서 OR 삼성전기</div>
+<div class="topic-manager">
+  <input id="topicNameInput" type="text" placeholder="주제명 예: MLCC">
+  <input id="topicQueryInput" type="text" placeholder="검색식 예: MLCC OR 적층세라믹콘덴서 OR 삼성전기">
+  <input id="topicPriorityInput" type="number" min="1" max="9" value="5" title="우선순위">
+  <div><button onclick="saveBreakingTopic()" style="background:#7a4cc2">저장/추가</button><button onclick="clearTopicForm()" style="background:#555">입력초기화</button></div>
+</div>
+<div class="row" style="margin-top:10px">
+  <button onclick="resetBreakingTopics()" style="background:#8b3a3a">기본 주제로 복원</button>
+  <span id="topicManagerStatus" class="meta">주제를 불러오는 중입니다.</span>
+</div>
+<div id="topicList" class="topic-list"></div>
 </div>
 <div class="box">
-<h2>📊 주제별 뉴스 건수</h2>
+<h2>📊 내 주제별 뉴스 건수</h2>
 <div id="breakingTopics" class="cardgrid"></div>
 </div>
 <div class="box">
@@ -333,6 +356,7 @@ function init(){
   document.getElementById("summary").innerHTML="<span class='ok'>준비 완료. 조건을 입력하고 검색하세요.</span>";
   loadMarketCharts();
   loadDictionary();
+  loadBreakingTopics();
 }
 
 function getPayload(){
@@ -592,6 +616,101 @@ function showTab(tabId, btn){
   if(btn) btn.classList.add("active");
 }
 
+let EDITING_TOPIC_KEY=null;
+
+function toggleTopicManager(){
+  const box=document.getElementById("topicManagerBox");
+  if(!box) return;
+  box.classList.toggle("hidden");
+  if(!box.classList.contains("hidden")) loadBreakingTopics();
+}
+
+function clearTopicForm(){
+  EDITING_TOPIC_KEY=null;
+  document.getElementById("topicNameInput").value="";
+  document.getElementById("topicQueryInput").value="";
+  document.getElementById("topicPriorityInput").value="5";
+}
+
+async function loadBreakingTopics(){
+  const list=document.getElementById("topicList");
+  const st=document.getElementById("topicManagerStatus");
+  if(st) st.innerHTML="주제 불러오는 중...";
+  try{
+    const res=await fetch(`/api/breaking-topics?ts=${Date.now()}`);
+    const data=await res.json();
+    if(!data.ok){ if(st) st.innerHTML=`<span class='err'>${escapeHtml(data.error||"주제 로드 실패")}</span>`; return; }
+    renderBreakingTopicList(data.topics || []);
+    if(st) st.innerHTML=`<span class='ok'>내 주제 ${(data.topics||[]).length}개</span>`;
+  }catch(e){ if(st) st.innerHTML=`<span class='err'>주제 오류: ${escapeHtml(e.message)}</span>`; }
+}
+
+function renderBreakingTopicList(topics){
+  const list=document.getElementById("topicList");
+  if(!list) return;
+  if(!topics.length){ list.innerHTML="<div class='emptybox'>등록된 주제가 없습니다. 기본 주제로 복원하거나 새 주제를 추가하세요.</div>"; return; }
+  list.innerHTML=topics.map(t=>`
+    <div class='topic-row'>
+      <div class='topic-name'>${escapeHtml(t.name)} ${t.enabled===false?"<span class='badge'>OFF</span>":""}</div>
+      <div class='topic-query'>${escapeHtml(t.query)}</div>
+      <div class='meta'>우선순위 ${escapeHtml(t.priority||5)}</div>
+      <div class='topic-actions'>
+        <button onclick='editBreakingTopic(${JSON.stringify(t).replace(/'/g,"&#039;")})' style='background:#555'>수정</button>
+        <button onclick='deleteBreakingTopic("${escapeHtml(t.key)}")' style='background:#8b3a3a'>삭제</button>
+      </div>
+    </div>`).join("");
+}
+
+function editBreakingTopic(t){
+  EDITING_TOPIC_KEY=t.key || null;
+  document.getElementById("topicNameInput").value=t.name || "";
+  document.getElementById("topicQueryInput").value=t.query || t.name || "";
+  document.getElementById("topicPriorityInput").value=t.priority || 5;
+  const box=document.getElementById("topicManagerBox");
+  if(box) box.classList.remove("hidden");
+}
+
+async function saveBreakingTopic(){
+  const name=document.getElementById("topicNameInput").value.trim();
+  const query=document.getElementById("topicQueryInput").value.trim() || name;
+  const priority=document.getElementById("topicPriorityInput").value || 5;
+  const st=document.getElementById("topicManagerStatus");
+  if(!name){ if(st) st.innerHTML="<span class='warn'>주제명을 입력하세요.</span>"; return; }
+  try{
+    const res=await fetch('/api/breaking-topics/save',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({key:EDITING_TOPIC_KEY,name,query,priority})});
+    const data=await res.json();
+    if(!data.ok){ if(st) st.innerHTML=`<span class='err'>${escapeHtml(data.error||"저장 실패")}</span>`; return; }
+    clearTopicForm();
+    renderBreakingTopicList(data.topics || []);
+    if(st) st.innerHTML="<span class='ok'>주제 저장 완료. 속보 새로고침을 누르면 반영됩니다.</span>";
+  }catch(e){ if(st) st.innerHTML=`<span class='err'>저장 오류: ${escapeHtml(e.message)}</span>`; }
+}
+
+async function deleteBreakingTopic(key){
+  if(!confirm('이 주제를 삭제할까요?')) return;
+  const st=document.getElementById("topicManagerStatus");
+  try{
+    const res=await fetch('/api/breaking-topics/delete',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({key})});
+    const data=await res.json();
+    if(!data.ok){ if(st) st.innerHTML=`<span class='err'>${escapeHtml(data.error||"삭제 실패")}</span>`; return; }
+    renderBreakingTopicList(data.topics || []);
+    if(st) st.innerHTML="<span class='ok'>삭제 완료. 속보 새로고침을 누르면 반영됩니다.</span>";
+  }catch(e){ if(st) st.innerHTML=`<span class='err'>삭제 오류: ${escapeHtml(e.message)}</span>`; }
+}
+
+async function resetBreakingTopics(){
+  if(!confirm('내 주제를 기본값으로 복원할까요?')) return;
+  const st=document.getElementById("topicManagerStatus");
+  try{
+    const res=await fetch('/api/breaking-topics/reset',{method:'POST'});
+    const data=await res.json();
+    if(!data.ok){ if(st) st.innerHTML=`<span class='err'>${escapeHtml(data.error||"복원 실패")}</span>`; return; }
+    clearTopicForm();
+    renderBreakingTopicList(data.topics || []);
+    if(st) st.innerHTML="<span class='ok'>기본 주제로 복원되었습니다.</span>";
+  }catch(e){ if(st) st.innerHTML=`<span class='err'>복원 오류: ${escapeHtml(e.message)}</span>`; }
+}
+
 async function loadBreakingNews(){
   const status=document.getElementById("breakingStatus");
   const topics=document.getElementById("breakingTopics");
@@ -616,7 +735,7 @@ async function loadBreakingNews(){
       return;
     }
 
-    status.innerHTML=`<span class="ok">${data.periodLabel} / 전체 ${data.total}건 / 업데이트 ${data.generatedAt}</span>` + (data.errors && data.errors.length ? `<br><span class="warn">${data.errors.join(" / ")}</span>` : "");
+    status.innerHTML=`<span class="ok">${data.periodLabel} / 내 주제 ${data.topicCount||0}개 / 중복 제거 후 전체 ${data.total}건 / 업데이트 ${data.generatedAt}</span>` + (data.errors && data.errors.length ? `<br><span class="warn">${data.errors.join(" / ")}</span>` : "");
 
     data.topics.forEach(t=>{
       const div=document.createElement("div");
@@ -1605,18 +1724,115 @@ def add_event_keyword(category, keyword, impact=70, novelty=20):
 
 
 
-BREAKING_TOPICS = [
-    {"name": "한국증시", "query": "한국 증시 OR 코스피 OR 코스닥"},
-    {"name": "속보", "query": "속보 증시 OR 주식 속보"},
-    {"name": "반도체", "query": "반도체 OR HBM OR 삼성전자 OR SK하이닉스"},
-    {"name": "AI", "query": "AI OR 인공지능 OR 엔비디아 OR 데이터센터"},
-    {"name": "바이오", "query": "바이오 OR 제약 OR FDA OR 임상"},
-    {"name": "방산", "query": "방산 OR 전쟁 OR 수주"},
-    {"name": "원전전력", "query": "원전 OR 원자력 OR 전력망 OR 변압기"},
-    {"name": "2차전지", "query": "2차전지 OR 배터리 OR 리튬 OR 전기차"},
-    {"name": "로봇", "query": "로봇 OR 휴머노이드 OR 피지컬AI"},
-    {"name": "거시", "query": "환율 OR 금리 OR 유가 OR 국채금리 OR 연준"}
+DEFAULT_BREAKING_TOPICS = [
+    {"name": "한국증시", "query": "한국 증시 OR 코스피 OR 코스닥", "priority": 5, "enabled": True},
+    {"name": "속보", "query": "속보 증시 OR 주식 속보", "priority": 5, "enabled": True},
+    {"name": "반도체", "query": "반도체 OR HBM OR 삼성전자 OR SK하이닉스", "priority": 5, "enabled": True},
+    {"name": "AI", "query": "AI OR 인공지능 OR 엔비디아 OR 데이터센터", "priority": 5, "enabled": True},
+    {"name": "바이오", "query": "바이오 OR 제약 OR FDA OR 임상", "priority": 5, "enabled": True},
+    {"name": "방산", "query": "방산 OR 전쟁 OR 수주", "priority": 4, "enabled": True},
+    {"name": "원전전력", "query": "원전 OR 원자력 OR 전력망 OR 변압기", "priority": 4, "enabled": True},
+    {"name": "2차전지", "query": "2차전지 OR 배터리 OR 리튬 OR 전기차", "priority": 4, "enabled": True},
+    {"name": "로봇", "query": "로봇 OR 휴머노이드 OR 피지컬AI", "priority": 4, "enabled": True},
+    {"name": "거시", "query": "환율 OR 금리 OR 유가 OR 국채금리 OR 연준", "priority": 4, "enabled": True}
 ]
+
+def topic_key(name):
+    base = re.sub(r"[^0-9A-Za-z가-힣]+", "_", str(name or "").strip()).strip("_")
+    return base or "topic"
+
+def breaking_topics_path():
+    return os.path.join(app_dir(), "breaking_topics.json")
+
+def normalize_breaking_topic(t):
+    name = str(t.get("name", "") or "").strip()
+    query = str(t.get("query", "") or name).strip()
+    if not name:
+        return None
+    try:
+        priority = int(t.get("priority", 5))
+    except Exception:
+        priority = 5
+    priority = max(1, min(priority, 9))
+    return {
+        "key": str(t.get("key") or topic_key(name)),
+        "name": name,
+        "query": query or name,
+        "priority": priority,
+        "enabled": bool(t.get("enabled", True))
+    }
+
+def default_breaking_topics():
+    out=[]
+    for t in DEFAULT_BREAKING_TOPICS:
+        nt=normalize_breaking_topic(t)
+        if nt:
+            out.append(nt)
+    return out
+
+def save_breaking_topics(topics):
+    clean=[]
+    seen=set()
+    for t in topics or []:
+        nt=normalize_breaking_topic(t)
+        if not nt:
+            continue
+        k=nt["key"]
+        # 이름/검색식 기준 중복 제거
+        sig=(normalize_event_text(nt["name"]), normalize_event_text(nt["query"]))
+        if k in seen or sig in seen:
+            continue
+        seen.add(k); seen.add(sig)
+        clean.append(nt)
+    clean.sort(key=lambda x:(-int(x.get("priority",5)), x.get("name","")))
+    with open(breaking_topics_path(), "w", encoding="utf-8") as f:
+        json.dump({"topics": clean}, f, ensure_ascii=False, indent=2)
+    return clean
+
+def load_breaking_topics():
+    path=breaking_topics_path()
+    if os.path.exists(path):
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                raw=json.load(f)
+            topics=raw.get("topics", raw if isinstance(raw, list) else [])
+            clean=save_breaking_topics(topics)
+            if clean:
+                return clean
+        except Exception:
+            log_error("breaking topics load failed\n" + traceback.format_exc())
+    return save_breaking_topics(default_breaking_topics())
+
+def upsert_breaking_topic(payload):
+    topics=load_breaking_topics()
+    key=str(payload.get("key") or "").strip() or topic_key(payload.get("name"))
+    nt=normalize_breaking_topic({
+        "key": key,
+        "name": payload.get("name"),
+        "query": payload.get("query"),
+        "priority": payload.get("priority", 5),
+        "enabled": payload.get("enabled", True)
+    })
+    if not nt:
+        raise ValueError("주제명이 비어 있습니다.")
+    # 같은 이름/검색식은 기존 것을 갱신
+    name_sig=normalize_event_text(nt["name"])
+    query_sig=normalize_event_text(nt["query"])
+    out=[]; replaced=False
+    for t in topics:
+        if t.get("key")==key or normalize_event_text(t.get("name",""))==name_sig or normalize_event_text(t.get("query",""))==query_sig:
+            if not replaced:
+                out.append(nt); replaced=True
+            continue
+        out.append(t)
+    if not replaced:
+        out.append(nt)
+    return save_breaking_topics(out)
+
+def delete_breaking_topic(key):
+    key=str(key or "").strip()
+    topics=[t for t in load_breaking_topics() if t.get("key") != key]
+    return save_breaking_topics(topics)
 
 
 def search_google_breaking(topic_name, query, period_when="1d", max_results=30):
@@ -1689,15 +1905,25 @@ def breaking_snapshot(period_value=12, period_unit="h", max_per_topic=20):
     all_items = []
     errors = []
 
-    for t in BREAKING_TOPICS:
+    breaking_topics = [t for t in load_breaking_topics() if t.get("enabled", True)]
+    global_seen = set()
+    for t in breaking_topics:
         try:
-            items = search_google_breaking(t["name"], t["query"], period_when, max_per_topic)
-            items = dedupe_breaking_items(items)
-            topic_results.append({"name": t["name"], "count": len(items), "items": items})
+            raw_items = search_google_breaking(t["name"], t["query"], period_when, max_per_topic)
+            raw_items = dedupe_breaking_items(raw_items)
+            items = []
+            for it in raw_items:
+                key = normalize_event_text(it.get("link") or it.get("title", ""))
+                title_key = normalize_event_text(it.get("title", ""))
+                if key in global_seen or title_key in global_seen:
+                    continue
+                global_seen.add(key); global_seen.add(title_key)
+                items.append(it)
+            topic_results.append({"name": t["name"], "query": t.get("query", t["name"]), "count": len(items), "items": items})
             all_items.extend(items)
         except Exception as e:
             errors.append(f"{t['name']}: {e}")
-            topic_results.append({"name": t["name"], "count": 0, "items": []})
+            topic_results.append({"name": t["name"], "query": t.get("query", t["name"]), "count": 0, "items": []})
             log_error("breaking search failed\n" + traceback.format_exc())
 
     # 전체 중복 제거 후 최신순 정렬
@@ -1728,6 +1954,7 @@ def breaking_snapshot(period_value=12, period_unit="h", max_per_topic=20):
         "periodLabel": period_label,
         "generatedAt": datetime.now(KST).strftime("%Y-%m-%d %H:%M:%S"),
         "topics": topic_results,
+        "topicCount": len(breaking_topics),
         "total": len(all_items),
         "topItems": top_items,
         "keywordStats": keyword_stats[:20],
@@ -2041,6 +2268,12 @@ class Handler(BaseHTTPRequestHandler):
             except Exception as e:
                 log_error(traceback.format_exc())
                 self.send_content(500, json.dumps({"ok": False, "error": str(e)}, ensure_ascii=False), "application/json; charset=utf-8")
+        elif self.path.startswith("/api/breaking-topics"):
+            try:
+                self.send_content(200, json.dumps({"ok": True, "topics": load_breaking_topics()}, ensure_ascii=False), "application/json; charset=utf-8")
+            except Exception as e:
+                log_error(traceback.format_exc())
+                self.send_content(500, json.dumps({"ok": False, "error": str(e)}, ensure_ascii=False), "application/json; charset=utf-8")
         elif self.path.startswith("/api/breaking"):
             try:
                 from urllib.parse import urlparse, parse_qs
@@ -2073,6 +2306,21 @@ class Handler(BaseHTTPRequestHandler):
                 self.send_content(200, json.dumps({"ok": True, "data": data}, ensure_ascii=False), "application/json; charset=utf-8")
                 return
 
+            if self.path == "/api/breaking-topics/save":
+                topics = upsert_breaking_topic(payload)
+                self.send_content(200, json.dumps({"ok": True, "topics": topics}, ensure_ascii=False), "application/json; charset=utf-8")
+                return
+
+            if self.path == "/api/breaking-topics/delete":
+                topics = delete_breaking_topic(payload.get("key", ""))
+                self.send_content(200, json.dumps({"ok": True, "topics": topics}, ensure_ascii=False), "application/json; charset=utf-8")
+                return
+
+            if self.path == "/api/breaking-topics/reset":
+                topics = save_breaking_topics(default_breaking_topics())
+                self.send_content(200, json.dumps({"ok": True, "topics": topics}, ensure_ascii=False), "application/json; charset=utf-8")
+                return
+
             self.send_content(404,json.dumps({"ok":False,"error":"not found"},ensure_ascii=False),"application/json; charset=utf-8")
         except Exception as e:
             log_error(traceback.format_exc()); self.send_content(500,json.dumps({"ok":False,"error":str(e)},ensure_ascii=False),"application/json; charset=utf-8")
@@ -2085,26 +2333,18 @@ def open_browser(url):
 
 def main():
     os.chdir(app_dir())
-    env_port = os.environ.get("PORT")
-    port = int(env_port) if env_port else find_free_port()
-    server=ThreadingHTTPServer((HOST,port),Handler)
-    display_host = "127.0.0.1" if HOST in ("0.0.0.0", "::") else HOST
-    url=f"http://{display_host}:{port}/"
-    # Render/클라우드에서는 브라우저 자동 실행 금지. 로컬 실행일 때만 자동으로 엽니다.
-    if not env_port:
+    port = int(os.environ.get("PORT", "0") or "0") or find_free_port()
+    host = "0.0.0.0" if os.environ.get("PORT") else HOST
+    server=ThreadingHTTPServer((host,port),Handler)
+    url=f"http://{host}:{port}/"
+    if not os.environ.get("PORT"):
         threading.Thread(target=open_browser,args=(url,),daemon=True).start()
-    print(APP_TITLE, flush=True)
-    print("URL:", url, flush=True)
-    print("HOST:", HOST, "PORT:", port, flush=True)
+    print(APP_TITLE); print("URL:",url); print("Close this window to stop server.")
     server.serve_forever()
 
 if __name__=="__main__":
-    try:
-        main()
-    except KeyboardInterrupt:
-        pass
+    try: main()
+    except KeyboardInterrupt: pass
     except Exception:
-        err = traceback.format_exc()
-        log_error(err)
-        print(err, flush=True)
-        raise
+        log_error(traceback.format_exc())
+        input("Error. Check error_log.txt. Press Enter.")

@@ -1,2 +1,2 @@
-# 기본 기능은 Python 표준 라이브러리만 사용합니다.
-# Kiwi 형태소 분석은 선택 기능이므로 Render 기본 배포에서는 제외합니다.
+# Optional: kiwipiepy enables better Korean keyword extraction if installed.
+# kiwipiepy

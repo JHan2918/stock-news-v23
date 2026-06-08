@@ -1,0 +1,81 @@
+{
+  "topics": [
+    {
+      "key": "MLCC",
+      "name": "MLCC",
+      "query": "MLCC OR 삼성전기",
+      "priority": 6,
+      "enabled": true
+    },
+    {
+      "key": "AI",
+      "name": "AI",
+      "query": "AI OR 인공지능 OR 엔비디아 OR 데이터센터",
+      "priority": 5,
+      "enabled": true
+    },
+    {
+      "key": "바이오",
+      "name": "바이오",
+      "query": "바이오 OR 제약 OR FDA OR 임상",
+      "priority": 5,
+      "enabled": true
+    },
+    {
+      "key": "반도체",
+      "name": "반도체",
+      "query": "반도체 OR HBM OR 삼성전자 OR SK하이닉스",
+      "priority": 5,
+      "enabled": true
+    },
+    {
+      "key": "속보",
+      "name": "속보",
+      "query": "속보 증시 OR 주식 속보",
+      "priority": 5,
+      "enabled": true
+    },
+    {
+      "key": "한국증시",
+      "name": "한국증시",
+      "query": "한국 증시 OR 코스피 OR 코스닥",
+      "priority": 5,
+      "enabled": true
+    },
+    {
+      "key": "2차전지",
+      "name": "2차전지",
+      "query": "2차전지 OR 배터리 OR 리튬 OR 전기차",
+      "priority": 4,
+      "enabled": true
+    },
+    {
+      "key": "거시",
+      "name": "거시",
+      "query": "환율 OR 금리 OR 유가 OR 국채금리 OR 연준",
+      "priority": 4,
+      "enabled": true
+    },
+    {
+      "key": "로봇",
+      "name": "로봇",
+      "query": "로봇 OR 휴머노이드 OR 피지컬AI",
+      "priority": 4,
+      "enabled": true
+    },
+    {
+      "key": "방산",
+      "name": "방산",
+      "query": "방산 OR 전쟁 OR 수주",
+      "priority": 4,
+      "enabled": true
+    },
+    {
+      "key": "원전전력",
+      "name": "원전전력",
+      "query": "원전 OR 원자력 OR 전력망 OR 변압기",
+      "priority": 4,
+      "enabled": true
+    }
+  ]
+}
