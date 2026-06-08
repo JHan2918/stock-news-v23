@@ -157,11 +157,11 @@ button{background:var(--blue);color:white;border:0;border-radius:10px;padding:12
 <h1>📰 주식 속보 뉴스 이벤트 사전 엔진 v23</h1>
 <div class="desc">뉴스 검색, 속보, 매크로, 이벤트 사전을 한 화면에서 보는 주식 투자 보조 대시보드입니다.</div>
 <div class="tabs">
-  <button class="tabbtn active" onclick="showTab('searchTab', this)">뉴스검색</button>
-  <button class="tabbtn" onclick="showTab('breakingTab', this); loadBreakingTopicSettings(); loadBreakingNews();">속보뉴스</button>
-  <button class="tabbtn" onclick="showTab('macroTab', this)">매크로</button>
-  <button class="tabbtn" onclick="showTab('exportTab', this); loadExportDashboard(false);">산업데이터</button>
-  <button class="tabbtn" onclick="showTab('dictTab', this)">이벤트사전</button>
+  <button class="tabbtn active" data-tab="searchTab" id="tabBtnSearch">뉴스검색</button>
+  <button class="tabbtn" data-tab="breakingTab" id="tabBtnBreaking">속보뉴스</button>
+  <button class="tabbtn" data-tab="macroTab" id="tabBtnMacro">매크로</button>
+  <button class="tabbtn" data-tab="exportTab" id="tabBtnExport">산업데이터</button>
+  <button class="tabbtn" data-tab="dictTab" id="tabBtnDict">이벤트사전</button>
 </div>
 </div>
 
@@ -335,6 +335,7 @@ const DEFAULT_KEYWORDS = __DEFAULT_KEYWORDS__;
 let LAST_DATA=null;
 
 function init(){
+  bindTabButtons();
   const grid=document.getElementById("keywordGrid");
   DEFAULT_KEYWORDS.forEach(kw=>{
     const lab=document.createElement("label"); lab.className="kw";
@@ -348,9 +349,9 @@ function init(){
   document.getElementById("sortBy").addEventListener("change", clearResultsOnly);
   document.querySelectorAll("#keywordGrid input").forEach(x=>x.addEventListener("change", clearResultsOnly));
   document.getElementById("summary").innerHTML="<span class='ok'>준비 완료. 조건을 입력하고 검색하세요.</span>";
-  loadMarketCharts();
-  loadDictionary();
-  loadBreakingTopicSettings();
+  try{ loadMarketCharts(); }catch(e){ console.warn(e); }
+  try{ loadDictionary(); }catch(e){ console.warn(e); }
+  try{ loadBreakingTopicSettings(); }catch(e){ console.warn(e); }
 }
 
 function getPayload(){
@@ -601,6 +602,29 @@ async function addDictionaryKeyword(){
 }
 
 
+
+
+function bindTabButtons(){
+  const buttons=[...document.querySelectorAll('.tabbtn[data-tab]')];
+  buttons.forEach(btn=>{
+    btn.onclick=function(ev){
+      ev.preventDefault();
+      const tabId=this.getAttribute('data-tab');
+      showTab(tabId, this);
+      if(tabId==='breakingTab'){
+        loadBreakingTopicSettings();
+        loadBreakingNews();
+      }else if(tabId==='exportTab'){
+        loadExportDashboard(false);
+      }else if(tabId==='macroTab'){
+        loadMarketCharts();
+      }else if(tabId==='dictTab'){
+        loadDictionary();
+      }
+      return false;
+    };
+  });
+}
 
 function showTab(tabId, btn){
   document.querySelectorAll(".tabcontent").forEach(x=>x.classList.remove("active"));
@@ -1100,7 +1124,7 @@ function escapeHtml(s){
     .replace(/'/g,"&#039;");
 }
 
-init();
+if(document.readyState === "loading"){document.addEventListener("DOMContentLoaded", init);}else{init();}
 </script>
 </body>
 </html>
