@@ -9,14 +9,21 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import quote_plus
 from urllib.request import Request, urlopen
 
-APP_TITLE = "주식 속보 뉴스 이벤트 대시보드 v26 Lite Render"
-HOST = "127.0.0.1"
+APP_TITLE = "주식 속보 뉴스 이벤트 사전 엔진 v23 + 산업데이터"
+HOST = os.environ.get("HOST", "0.0.0.0" if os.environ.get("PORT") else "127.0.0.1")
 KST = timezone(timedelta(hours=9))
 
-# Render 무료 서버 안정성을 위해 Kiwi는 비활성화합니다.
-# 로컬 버전에서는 Kiwi를 사용할 수 있고, Render 버전은 정규식 fallback으로 작동합니다.
+# Kiwi 형태소 분석기는 선택 기능입니다.
+# 설치되어 있으면 명사 중심 키워드 추출에 사용하고, 없으면 기존 룰 기반으로 자동 fallback합니다.
 KIWI_AVAILABLE = False
 KIWI = None
+try:
+    from kiwipiepy import Kiwi
+    KIWI = Kiwi()
+    KIWI_AVAILABLE = True
+except Exception:
+    KIWI_AVAILABLE = False
+    KIWI = None
 
 
 DEFAULT_KEYWORDS = ["달러", "환율", "채권", "국채금리", "유가"]
@@ -77,12 +84,12 @@ HTML = '''
 <html lang="ko">
 <head>
 <meta charset="utf-8">
-<title>주식 속보 뉴스 이벤트 대시보드 v26 Lite Render</title>
+<title>주식 속보 뉴스 이벤트 사전 엔진 v23</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <style>
 :root{--bg:#101418;--panel:#171d23;--line:#2b3542;--text:#e8edf2;--muted:#9fb0bf;--blue:#2f81f7;--chip:#26384d;--warn:#ffb86c;--err:#ff8585;--ok:#8aff8a}
 body{font-family:"Malgun Gothic",Arial,sans-serif;margin:0;background:var(--bg);color:var(--text)}
-.wrap{max-width:1600px;margin:0 auto;padding:24px}
+.wrap{max-width:1280px;margin:0 auto;padding:24px}
 h1{margin:0 0 8px;font-size:28px}.desc{color:var(--muted);margin-bottom:18px}.box{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:16px;margin-bottom:16px}
 .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(126px,1fr));gap:8px}
 label.kw{background:#202832;border:1px solid #344151;border-radius:10px;padding:8px 10px;cursor:pointer;display:block}
@@ -128,17 +135,28 @@ button{background:var(--blue);color:white;border:0;border-radius:10px;padding:12
 .topiccard{background:#202832;border:1px solid #344151;border-radius:12px;padding:12px;cursor:pointer}
 .topiccard:hover{background:#283241}
 
+
+
+.export-hero{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px;margin-top:10px}
+.export-metric{background:#202832;border:1px solid #344151;border-radius:12px;padding:12px}
+.export-metric .k{font-size:13px;color:#9fb0bf}.export-metric .v{font-size:24px;font-weight:bold;color:#d7e7ff;margin-top:4px}.export-metric .c{font-size:13px;margin-top:4px}
+.export-full{display:block}.export-row3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px;align-items:start}.export-row2{display:grid;grid-template-columns:1fr 1fr;gap:14px;align-items:start}.export-analysis-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px;align-items:start}.export-side-stack{display:grid;grid-template-columns:1fr;gap:14px}.export-chartbox{background:#0d1116;border:1px solid #344151;border-radius:12px;padding:12px;margin-top:12px}.export-chartbox h3{margin:0 0 8px;font-size:17px}
+.export-svg{width:100%;height:280px;background:#0d1116;border-radius:8px}.export-svg.tall{height:440px}.export-svg.small{height:230px}
+.export-table{width:100%;border-collapse:collapse;font-size:13px}.export-table th,.export-table td{border-bottom:1px solid #344151;padding:7px;text-align:right}.export-table th:first-child,.export-table td:first-child{text-align:left}.export-table th{color:#9fb0bf;font-weight:normal}.export-rank{display:block;margin-top:0}.export-rank-card{background:#202832;border:1px solid #344151;border-radius:12px;padding:12px}.scorebar{height:8px;background:#344151;border-radius:999px;overflow:hidden;margin-top:8px}.scorebar>span{display:block;height:100%;background:#7db1ff}.pill{display:inline-block;border:1px solid #4f77aa;border-radius:999px;padding:3px 8px;margin:2px;color:#d7e7ff;background:#26384d;font-size:12px}.emptybox{border:1px dashed #3d4a58;border-radius:12px;padding:16px;color:#9fb0bf;background:#121920;line-height:1.7}.trend-up{color:#8aff8a}.trend-down{color:#ff8585}.trend-flat{color:#aaa}@media(max-width:1100px){.export-row3,.export-row2,.export-analysis-grid{grid-template-columns:1fr}.export-svg{height:260px}}
+
 </style>
 </head>
 <body>
 <div class="wrap">
 <div class="toolbar">
-<h1>📰 주식 속보 뉴스 이벤트 대시보드 v26 Lite Render</h1>
-<div class="desc">뉴스검색, 속보뉴스, 매크로만 남긴 경량화 버전입니다.</div>
+<h1>📰 주식 속보 뉴스 이벤트 사전 엔진 v23</h1>
+<div class="desc">뉴스 검색, 속보, 매크로, 이벤트 사전을 한 화면에서 보는 주식 투자 보조 대시보드입니다.</div>
 <div class="tabs">
   <button class="tabbtn active" onclick="showTab('searchTab', this)">뉴스검색</button>
   <button class="tabbtn" onclick="showTab('breakingTab', this); loadBreakingNews();">속보뉴스</button>
   <button class="tabbtn" onclick="showTab('macroTab', this)">매크로</button>
+  <button class="tabbtn" onclick="showTab('exportTab', this); loadExportDashboard(false);">산업데이터</button>
+  <button class="tabbtn" onclick="showTab('dictTab', this)">이벤트사전</button>
 </div>
 </div>
 
@@ -163,10 +181,19 @@ button{background:var(--blue);color:white;border:0;border-radius:10px;padding:12
 
 
 
+<div class="box">
+<h2>🏷️ 기본 키워드 선택</h2>
+<div class="grid" id="keywordGrid"></div>
+</div>
+
+
+
+
 
 <div class="box"><h2>🧾 검색 요약</h2><div id="summary" class="meta">아직 검색 전입니다.</div></div>
+<div class="box"><h2>🧩 이슈 카드</h2><div id="cards" class="cardgrid"></div></div>
 <div class="box"><h2>🕸️ 키워드 연결 그래프</h2><div class='meta'>노랑=핵심/종목/시장 키워드, 초록=신규 테마 후보, 파랑=후보 키워드. 글씨 크기는 고정. Kiwi ON이면 명사 중심 추출.</div><div id="graph" class="graph"><div class="meta" style="padding:16px">검색 후 표시됩니다.</div></div></div>
-<div class="box"><h2>📰 뉴스 제목</h2><div id="status" class="meta">검색 전입니다. 검색 요약이나 그래프 노드를 클릭하면 관련 뉴스가 펼쳐집니다.</div><div id="newsSections"></div></div>
+<div class="box"><h2>📰 뉴스 제목</h2><div id="status" class="meta">검색 전입니다. 위 카드나 그래프 노드를 클릭하면 관련 뉴스가 펼쳐집니다.</div><div id="newsSections"></div></div>
 
 </div>
 
@@ -201,13 +228,85 @@ button{background:var(--blue);color:white;border:0;border-radius:10px;padding:12
 <h2>📈 매크로 그래프</h2>
 <div class="row">
 <button onclick="loadMarketCharts()" style="background:#246b45">매크로 그래프 새로고침</button>
-<span class="meta">나스닥 / 달러지수 / 원달러환율 / 미국10년물 국채금리 / WTI 유가 / 금, 최근 30일</span>
+<span class="meta">나스닥 / S&P500 / 다우 / 달러지수 / 원달러환율 / 미국10년물 / WTI / 금 / 비트코인, 최근 30일</span>
 </div>
 <div id="marketStatus" class="meta" style="margin-top:10px">아직 불러오기 전입니다.</div>
 <div id="marketGrid" class="marketgrid"></div>
 </div>
 </div>
 
+
+<div id="exportTab" class="tabcontent">
+<div class="box">
+<h2>📦 산업부 수출입 리포트 분석</h2>
+<div class="row">
+<button onclick="loadExportDashboard(false)" style="background:#246b45">자료 확인 / 저장데이터 갱신</button>
+<span class="meta">현재는 검증된 표 기반 JSON 데이터를 웹페이지에 표시합니다. 산업부 PDF 직접 다운로드는 불안정하여 제외했습니다.</span>
+</div>
+<div id="exportStatus" class="meta" style="margin-top:10px">산업데이터 탭을 열면 분석 대시보드를 불러옵니다.</div>
+<div id="exportRunLog" class="meta" style="margin-top:8px;line-height:1.7"></div>
+</div>
+<div class="box">
+<h2>📌 수출입 핵심 요약</h2>
+<div id="exportHero" class="export-hero"></div>
+<div id="exportSummary" class="meta" style="margin-top:10px"></div>
+</div>
+<div class="box export-full">
+  <h2>📊 20대 품목 수출 금액 순위</h2>
+  <div class="meta">메인 기준은 절대 수출금액입니다. 이 한 칸을 전체 폭으로 사용해서 현재 어느 품목이 가장 크게 수출되는지 먼저 확인합니다.</div>
+  <div id="exportTrendChart" class="export-chartbox"></div>
+  <div id="exportItemButtons" style="margin-top:8px"></div>
+</div>
+<div class="export-analysis-grid">
+  <div class="box">
+    <h2>📈 최근월 증감률 순위</h2>
+    <div class="meta">최근월 기준 성장 속도 순위입니다. 단, 투자 판단의 기본 기준은 오른쪽 수출액 순위입니다.</div>
+    <div id="exportGrowthChart" class="export-rank"></div>
+  </div>
+  <div class="box">
+    <h2>📋 수출액 순위</h2>
+    <div class="meta">최근월 수출액이 큰 품목부터 정렬합니다.</div>
+    <div id="exportGrowthTable"></div>
+  </div>
+  <div class="export-side-stack">
+    <div class="box">
+      <h2>🌎 국가별 최근 흐름</h2>
+      <div id="exportCountryChart" class="export-chartbox"></div>
+      <div id="exportCountryTable" style="margin-top:10px"></div>
+    </div>
+    <div class="box">
+      <h2>🗺️ 지역별 최근 흐름</h2>
+      <div id="exportRegionChart" class="export-chartbox"></div>
+      <div id="exportRegionTable" style="margin-top:10px"></div>
+    </div>
+  </div>
+</div>
+<div class="box">
+  <h2>🧭 품목 전체 표</h2>
+  <div id="exportItemTable"></div>
+</div>
+<div class="box">
+<h2>📰 수출 데이터와 연결할 뉴스 키워드</h2>
+<div id="exportNewsBridge" class="meta"></div>
+</div>
+</div>
+
+<div id="dictTab" class="tabcontent">
+<div class="box">
+<h2>📚 이벤트 사전 관리</h2>
+<div class="meta">새로 발견한 주식 이벤트 키워드를 JSON 사전에 추가합니다. 다음 검색부터 바로 반영됩니다.</div><br>
+<div class="row">
+<input id="dictCategory" type="text" placeholder="카테고리 예: 주주환원" style="width:180px">
+<input id="dictKeyword" type="text" placeholder="키워드 예: 자사주 소각" style="width:220px">
+<input id="dictImpact" type="number" min="0" max="100" value="80" title="중요도" style="width:90px">
+<input id="dictNovelty" type="number" min="0" max="100" value="20" title="신규성" style="width:90px">
+<button onclick="addDictionaryKeyword()" style="background:#7a4cc2">사전에 추가</button>
+<button onclick="loadDictionary()" style="background:#555">사전 보기</button>
+</div>
+<div id="dictStatus" class="meta" style="margin-top:10px">사전 준비 완료.</div>
+<div id="dictPreview" class="meta" style="margin-top:10px"></div>
+</div>
+</div>
 </div>
 
 <script>
@@ -218,31 +317,22 @@ window.onerror = function(message, source, lineno, colno, error){
 const DEFAULT_KEYWORDS = __DEFAULT_KEYWORDS__;
 let LAST_DATA=null;
 
-
-async function fetchJson(url, options){
-  const res = await fetch(url, options);
-  const text = await res.text();
-  let data;
-  try{
-    data = JSON.parse(text);
-  }catch(e){
-    throw new Error("서버가 JSON이 아닌 응답을 반환했습니다: " + (text ? text.slice(0, 200) : "(빈 응답)"));
-  }
-  if(!res.ok || data.ok === false){
-    throw new Error(data.error || ("HTTP " + res.status));
-  }
-  return data;
-}
-
-
 function init(){
+  const grid=document.getElementById("keywordGrid");
+  DEFAULT_KEYWORDS.forEach(kw=>{
+    const lab=document.createElement("label"); lab.className="kw";
+    const input=document.createElement("input"); input.type="checkbox"; input.value=kw;
+    lab.appendChild(input); lab.appendChild(document.createTextNode(" "+kw)); grid.appendChild(lab);
+  });
   document.getElementById("extraKeywords").addEventListener("input", clearResultsOnly);
   document.getElementById("periodValue").addEventListener("change", clearResultsOnly);
   document.getElementById("periodUnit").addEventListener("change", clearResultsOnly);
   document.getElementById("maxResults").addEventListener("change", clearResultsOnly);
   document.getElementById("sortBy").addEventListener("change", clearResultsOnly);
+  document.querySelectorAll("#keywordGrid input").forEach(x=>x.addEventListener("change", clearResultsOnly));
   document.getElementById("summary").innerHTML="<span class='ok'>준비 완료. 조건을 입력하고 검색하세요.</span>";
   loadMarketCharts();
+  loadDictionary();
 }
 
 function getPayload(){
@@ -251,15 +341,17 @@ function getPayload(){
     periodUnit: document.getElementById("periodUnit").value,
     maxResults: document.getElementById("maxResults").value,
     sortBy: document.getElementById("sortBy").value,
-    checkedKeywords:[],
+    checkedKeywords:[...document.querySelectorAll("#keywordGrid input:checked")].map(x=>x.value),
     extraKeywords: document.getElementById("extraKeywords").value
   };
 }
 
 function clearAll(){
   LAST_DATA = null;
+  document.querySelectorAll("#keywordGrid input").forEach(x=>x.checked=false);
   document.getElementById("extraKeywords").value="";
   document.getElementById("summary").innerHTML="<span class='ok'>초기화 완료.</span>";
+  document.getElementById("cards").innerHTML="";
   document.getElementById("graph").innerHTML="<div class='meta' style='padding:16px'>검색 후 표시됩니다.</div>";
   document.getElementById("newsSections").innerHTML="";
   document.getElementById("status").textContent="검색 전입니다.";
@@ -268,6 +360,7 @@ function clearAll(){
 function clearResultsOnly(){
   LAST_DATA = null;
   document.getElementById("summary").innerHTML = "<span class='warn'>검색 조건이 변경되었습니다. 다시 검색하세요.</span>";
+  document.getElementById("cards").innerHTML = "";
   document.getElementById("graph").innerHTML = "<div class='meta' style='padding:16px'>검색 후 표시됩니다.</div>";
   document.getElementById("newsSections").innerHTML = "";
   document.getElementById("status").textContent = "새 검색 조건입니다. 뉴스 검색 실행을 누르세요.";
@@ -291,6 +384,26 @@ function bindSummaryButtons(){
         toggleGroup(LAST_DATA.groups[idx].label);
       }
     });
+  });
+}
+
+function renderCards(data){
+  const el=document.getElementById("cards"); el.innerHTML="";
+
+  // 검색어 묶음 자체를 먼저 카드로 표시. 예: 보령 49건
+  data.groups.forEach(g=>{
+    const pg=data.perGroup[g.label];
+    const div=document.createElement("div"); div.className="card";
+    div.onclick=()=>toggleGroup(g.label);
+    div.innerHTML=`<div class="label">검색어: ${g.label}</div><div class="num">${pg.count}</div><div class="sub">전체 뉴스 펼치기</div>`;
+    el.appendChild(div);
+  });
+
+  data.keywordStats.slice(0,24).forEach(k=>{
+    const div=document.createElement("div"); div.className="card";
+    div.onclick=()=>showKeywordNews(k.keyword);
+    div.innerHTML=`<div class="label">${k.keyword}</div><div class="num">${k.count}</div><div class="sub">관련 뉴스 ${k.count}건 / 시장점수 ${k.marketScore} / ${k.category ? k.category + " / " : ""}${k.kind}</div>`;
+    el.appendChild(div);
   });
 }
 
@@ -328,7 +441,7 @@ function renderGraph(data){
 
 function renderNewsSections(data){
   const el=document.getElementById("newsSections");
-  el.innerHTML="<div class='meta'>검색 요약 버튼 또는 그래프 노드를 클릭하면 관련 뉴스가 여기에 표시됩니다.</div>";
+  el.innerHTML="<div class='meta'>검색 요약 버튼, 이슈 카드, 또는 그래프 노드를 클릭하면 관련 뉴스가 여기에 표시됩니다.</div>";
 }
 
 function toggleGroup(label){
@@ -392,19 +505,81 @@ async function searchNews(){
   // 새 검색 시작 시 이전 검색 데이터와 화면을 완전히 초기화
   LAST_DATA = null;
   document.getElementById("summary").innerHTML="검색 중...";
+  document.getElementById("cards").innerHTML="";
   document.getElementById("graph").innerHTML="<div class='meta' style='padding:16px'>그래프 생성 중...</div>";
   document.getElementById("newsSections").innerHTML="";
   document.getElementById("status").innerHTML="새 검색을 실행 중입니다...";
   try{
-    const data=await fetchJson("/api/search",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(getPayload())});
+    const res=await fetch("/api/search",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(getPayload())});
+    const data=await res.json();
     if(!data.ok){document.getElementById("summary").innerHTML=`<span class="err">${data.error}</span>`; btn.disabled=false; return;}
     LAST_DATA=data;
     document.getElementById("summary").innerHTML=renderSummary(data);
     bindSummaryButtons();
-    renderGraph(data); renderNewsSections(data);
-    document.getElementById("status").innerHTML="<span class='ok'>검색 완료. 요약 버튼/그래프 노드를 클릭하면 관련 뉴스가 펼쳐집니다.</span>";
+    renderCards(data); renderGraph(data); renderNewsSections(data);
+    document.getElementById("status").innerHTML="<span class='ok'>검색 완료. 카드/그래프 노드를 클릭하면 관련 뉴스가 펼쳐집니다.</span>";
   }catch(e){document.getElementById("summary").innerHTML=`<span class="err">오류: ${e.message}</span>`;}
   btn.disabled=false;
+}
+
+
+
+async function loadDictionary(){
+  const status=document.getElementById("dictStatus");
+  const preview=document.getElementById("dictPreview");
+  if(!status || !preview) return;
+  status.innerHTML="사전 불러오는 중...";
+  try{
+    const res=await fetch("/api/dictionary");
+    const data=await res.json();
+    if(!data.ok){
+      status.innerHTML=`<span class="err">${data.error || "사전 로드 실패"}</span>`;
+      return;
+    }
+    const cats=Object.keys(data.data || {});
+    let html=`카테고리 ${cats.length}개<br>`;
+    cats.slice(0,12).forEach(cat=>{
+      const info=data.data[cat];
+      const kws=(info.keywords||[]).slice(0,10).join(", ");
+      html+=`<b>${escapeHtml(cat)}</b> (${(info.keywords||[]).length}개): ${escapeHtml(kws)}<br>`;
+    });
+    preview.innerHTML=html;
+    status.innerHTML="<span class='ok'>사전 로드 완료.</span>";
+  }catch(e){
+    status.innerHTML=`<span class="err">사전 오류: ${e.message}</span>`;
+  }
+}
+
+async function addDictionaryKeyword(){
+  const category=document.getElementById("dictCategory").value.trim();
+  const keyword=document.getElementById("dictKeyword").value.trim();
+  const impact=document.getElementById("dictImpact").value;
+  const novelty=document.getElementById("dictNovelty").value;
+  const status=document.getElementById("dictStatus");
+
+  if(!category || !keyword){
+    status.innerHTML="<span class='warn'>카테고리와 키워드를 입력하세요.</span>";
+    return;
+  }
+
+  status.innerHTML="사전에 저장 중...";
+  try{
+    const res=await fetch("/api/dictionary/add",{
+      method:"POST",
+      headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({category,keyword,impact,novelty})
+    });
+    const data=await res.json();
+    if(!data.ok){
+      status.innerHTML=`<span class="err">${data.error || "저장 실패"}</span>`;
+      return;
+    }
+    status.innerHTML=`<span class="ok">저장 완료: ${escapeHtml(category)} / ${escapeHtml(keyword)}</span>`;
+    document.getElementById("dictKeyword").value="";
+    loadDictionary();
+  }catch(e){
+    status.innerHTML=`<span class="err">저장 오류: ${e.message}</span>`;
+  }
 }
 
 
@@ -434,7 +609,8 @@ async function loadBreakingNews(){
   news.innerHTML="";
 
   try{
-    const data=await fetchJson(`/api/breaking?value=${encodeURIComponent(v)}&unit=${encodeURIComponent(u)}&max=${encodeURIComponent(m)}`);
+    const res=await fetch(`/api/breaking?value=${encodeURIComponent(v)}&unit=${encodeURIComponent(u)}&max=${encodeURIComponent(m)}`);
+    const data=await res.json();
     if(!data.ok){
       status.innerHTML=`<span class="err">${data.error || "속보 로드 실패"}</span>`;
       return;
@@ -523,13 +699,28 @@ async function loadMarketCharts(){
   status.innerHTML="매크로 데이터 불러오는 중...";
   grid.innerHTML="";
   try{
-    const data=await fetchJson("/api/market");
+    const res=await fetch("/api/market");
+    const data=await res.json();
     if(!data.ok){
       status.innerHTML=`<span class="err">${data.error || "매크로 데이터 오류"}</span>`;
       return;
     }
     status.innerHTML=`<span class="ok">업데이트: ${data.generatedAt}</span>` + (data.errors && data.errors.length ? `<br><span class="warn">${data.errors.join(" / ")}</span>` : "");
-    data.items.forEach(item=>renderMarketCard(item, grid));
+    let lastCat="";
+    data.items.forEach(item=>{
+      if(item.category && item.category!==lastCat){
+        const h=document.createElement("div");
+        h.className="market-section-title";
+        h.style.gridColumn="1 / -1";
+        h.style.fontWeight="800";
+        h.style.margin="8px 0 0";
+        h.style.color="#d7e7ff";
+        h.textContent=item.category;
+        grid.appendChild(h);
+        lastCat=item.category;
+      }
+      renderMarketCard(item, grid);
+    });
   }catch(e){
     status.innerHTML=`<span class="err">매크로 그래프 오류: ${e.message}</span>`;
   }
@@ -580,6 +771,216 @@ function drawMiniChart(series){
     </svg>`;
 }
 
+
+
+let LAST_EXPORT_DATA=null;
+let SELECTED_EXPORT_ITEM=null;
+
+async function loadExportDashboard(force){
+  const status=document.getElementById("exportStatus");
+  if(!status) return;
+  status.innerHTML = "수출입 저장 데이터와 최신 게시물 확인 중...";
+  try{
+    const res=await fetch(`/api/export-report?force=${force ? "1" : "0"}&ts=${Date.now()}`);
+    const data=await res.json();
+    if(!data.ok){status.innerHTML=`<span class='err'>${escapeHtml(data.error || "분석 실패")}</span>`; return;}
+    LAST_EXPORT_DATA=data;
+    SELECTED_EXPORT_ITEM=null;
+    renderExportDashboard(data);
+    status.innerHTML=`<span class='ok'>${escapeHtml(data.statusMessage || "분석 완료")}</span> <span class='meta'>/ 업데이트 ${escapeHtml(data.generatedAt || "")}</span>`;
+    renderExportRunLog(data, force);
+  }catch(e){status.innerHTML=`<span class='err'>산업데이터 오류: ${escapeHtml(e.message)}</span>`;}
+}
+
+
+function renderExportRunLog(data, force){
+  const el=document.getElementById("exportRunLog"); if(!el) return;
+  const latest=data.latestPost || {};
+  const mode=data.analysisMode || (force ? "force" : "check");
+  const modeText = mode === "today" ? "오늘 신규자료 감지" : (mode === "error" ? "확인 오류" : "오늘 자료 확인");
+  const sourceUrl = data.url || latest.url || "";
+  const title = data.title || latest.title || "-";
+  const pub = data.publishedDate || latest.publishedDate || "-";
+  const saved = data.usedSavedData ? "저장된 표 기반 데이터 사용" : "신규 자료 반영";
+  el.innerHTML = `
+    <div style="background:#111820;border:1px solid #344151;border-radius:10px;padding:10px;margin-top:8px">
+      <b>실행 결과</b> : ${escapeHtml(modeText)} / ${escapeHtml(saved)}<br>
+      <b>감지 자료</b> : ${escapeHtml(title)}<br>
+      <b>게시일</b> : ${escapeHtml(pub)} ${sourceUrl ? `/ <a href='${sourceUrl}' target='_blank' style='color:#9dccff'>원문 열기</a>` : ""}<br>
+      <b>설명</b> : ${escapeHtml(data.runDetail || "현재 버전은 검증된 표 기반 JSON/내장 데이터를 웹페이지에 표시합니다. PDF 자동추출은 제외했습니다.")}
+    </div>`;
+}
+
+function renderExportDashboard(data){
+  renderExportHero(data);
+  renderExportTrend(data, null);
+  renderExportItemButtons(data);
+  renderExportThemeRank(data);
+  renderExportItemTable(data);
+  renderExportRegion(data);
+  renderExportNewsBridge(data);
+}
+
+function renderExportHero(data){
+  const hero=document.getElementById("exportHero");
+  const sum=document.getElementById("exportSummary");
+  if(!hero || !sum) return;
+  const m=data.metrics || {};
+  const metrics=[
+    ["보고서", data.reportMonth || "-", data.source || "산업통상자원부"],
+    ["수출", m.exportAmount || "-", m.exportYoY ? `${m.exportYoY}` : ""],
+    ["수입", m.importAmount || "-", m.importYoY ? `${m.importYoY}` : ""],
+    ["무역수지", m.balance || "-", m.balanceComment || ""]
+  ];
+  hero.innerHTML=metrics.map(x=>`<div class='export-metric'><div class='k'>${escapeHtml(x[0])}</div><div class='v'>${escapeHtml(x[1])}</div><div class='c ${String(x[2]).includes('-')?'trend-down':'trend-up'}'>${escapeHtml(x[2])}</div></div>`).join("");
+  sum.innerHTML = `<b>한줄 해석:</b> ${escapeHtml(data.headline || "품목별·월별 흐름을 기준으로 강한 산업을 확인합니다.")}<br><span class='meta'>원문: ${data.url ? `<a href='${data.url}' target='_blank' style='color:#9dccff'>산업부 자료 열기</a>` : "저장된 표 기반 데이터"}</span>`;
+}
+
+function renderExportItemButtons(data){
+  const el=document.getElementById("exportItemButtons"); if(!el) return;
+  const items=(data.items || []).slice().sort((a,b)=>(b.score||0)-(a.score||0));
+  el.innerHTML = `<span class='pill' onclick='SELECTED_EXPORT_ITEM=null;renderExportTrend(LAST_EXPORT_DATA,null)'>전체</span>` + items.map(it=>`<span class='pill' onclick='SELECTED_EXPORT_ITEM="${escapeHtml(it.key)}";renderExportTrend(LAST_EXPORT_DATA,"${escapeHtml(it.key)}")'>${escapeHtml(it.name)}</span>`).join("");
+}
+
+function renderExportTrend(data, selectedKey){
+  const box=document.getElementById("exportTrendChart"); if(!box) return;
+  const months=data.months || [];
+  let items=(data.items || []).slice().sort((a,b)=>(b.latestAmount||0)-(a.latestAmount||0));
+  if(!items.length){box.innerHTML="<div class='meta'>표시할 품목 데이터가 없습니다.</div>"; return;}
+
+  // 전체 화면의 메인 기준은 증감률이 아니라 절대 수출금액이다.
+  // 투자자가 먼저 봐야 하는 것은 '현재 어느 산업이 가장 크게 수출되는가'이므로 금액 기준 막대그래프로 표시한다.
+  if(!selectedKey){
+    const valid=items.filter(it=>typeof it.latestAmount==='number');
+    const w=820,h=Math.max(520, 28*valid.length+70),padL=120,padR=95,padT=20,padB=34;
+    const max=Math.max(1,...valid.map(it=>it.latestAmount||0));
+    const rowH=Math.max(22,(h-padT-padB)/Math.max(1,valid.length));
+    let svg=`<svg class='export-svg tall' viewBox='0 0 ${w} ${h}' preserveAspectRatio='none'>`;
+    for(let g=0; g<=4; g++){
+      const v=g*max/4;
+      const xx=padL+v*(w-padL-padR)/max;
+      svg+=`<line x1='${xx}' y1='${padT}' x2='${xx}' y2='${h-padB}' stroke='#22303d' stroke-width='1'/>`;
+      svg+=`<text x='${xx-18}' y='${h-8}' fill='#9fb0bf' font-size='10'>${Math.round(v/1000).toLocaleString()}B</text>`;
+    }
+    valid.forEach((it,i)=>{
+      const y=padT+i*rowH+3;
+      const val=it.latestAmount||0;
+      const bw=val*(w-padL-padR)/max;
+      const growth=typeof it.latest==='number' ? `${it.latest>0?'+':''}${it.latest}%` : '-';
+      svg+=`<text x='8' y='${y+14}' fill='#d7e7ff' font-size='11'>${i+1}. ${escapeHtml(it.name)}</text>`;
+      svg+=`<rect x='${padL}' y='${y}' width='${Math.max(2,bw)}' height='15' rx='3' fill='#7db1ff'/>`;
+      svg+=`<text x='${padL+bw+6}' y='${y+13}' fill='#d7e7ff' font-size='11'>${Number(val).toLocaleString()} 백만$</text>`;
+      svg+=`<text x='${w-58}' y='${y+13}' fill='${(it.latest||0)>=0?'#8aff8a':'#ff8585'}' font-size='11'>${growth}</text>`;
+    });
+    svg+='</svg>';
+    box.innerHTML=`<h3>최근월 20대 품목 수출금액 순위</h3>${svg}<div class='meta'>파란 막대는 최근월 수출금액입니다. 우측 증감률은 보조지표이며, 품목 버튼을 누르면 해당 품목의 월별 금액/증감률을 봅니다.</div>`;
+    return;
+  }
+
+  const item=items.find(x=>x.key===selectedKey);
+  if(!item){box.innerHTML="<div class='meta'>선택한 품목 데이터가 없습니다.</div>"; return;}
+  const amountSeries=(item.amounts||[]).map((v,i)=>({month:months[i]||String(i+1), value:v})).filter(d=>typeof d.value==='number');
+  const growthSeries=(item.monthly||[]).map((v,i)=>({month:months[i]||String(i+1), value:v})).filter(d=>typeof d.value==='number');
+  if(!amountSeries.length){box.innerHTML=`<h3>${escapeHtml(item.name)}</h3><div class='meta'>이 품목은 표시할 금액 데이터가 없습니다.</div>`; return;}
+  const w=760,h=330,padL=54,padR=24,padT=20,padB=38;
+  const max=Math.max(1,...amountSeries.map(d=>d.value));
+  const barW=(w-padL-padR)/Math.max(1,amountSeries.length)*0.55;
+  const x=(i)=>padL+i*(w-padL-padR)/Math.max(1,amountSeries.length);
+  const y=(v)=>padT+(max-v)*(h-padT-padB)/max;
+  let svg=`<svg class='export-svg tall' viewBox='0 0 ${w} ${h}' preserveAspectRatio='none'>`;
+  for(let g=0; g<=4; g++){const v=g*max/4; const yy=padT+(max-v)*(h-padT-padB)/max; svg+=`<line x1='${padL}' y1='${yy}' x2='${w-padR}' y2='${yy}' stroke='#22303d' stroke-width='1'/><text x='4' y='${yy+4}' fill='#9fb0bf' font-size='10'>${Math.round(v).toLocaleString()}</text>`;}
+  amountSeries.forEach((d,i)=>{const xx=x(i)+barW*0.35; const bh=h-padB-y(d.value); svg+=`<rect x='${xx}' y='${y(d.value)}' width='${barW}' height='${Math.max(2,bh)}' rx='3' fill='#7db1ff'/><text x='${xx-3}' y='${h-12}' fill='#9fb0bf' font-size='11'>${escapeHtml(d.month)}</text>`;});
+  svg+='</svg>';
+  const growthHtml=growthSeries.length ? `<div class='meta'>월별 증감률: ${growthSeries.map(d=>`${escapeHtml(d.month)} <b class='${d.value>=0?'trend-up':'trend-down'}'>${d.value>0?'+':''}${d.value}%</b>`).join(' / ')}</div>` : '';
+  box.innerHTML=`<h3>${escapeHtml(item.name)} 월별 수출금액</h3>${svg}<div class='meta'>단위: 백만 달러. 선택 품목은 금액 흐름을 먼저 표시하고, 증감률은 아래에 보조로 표시합니다.</div>${growthHtml}`;
+}
+
+function renderExportThemeRank(data){
+  const chartEl=document.getElementById("exportGrowthChart");
+  const tableEl=document.getElementById("exportGrowthTable");
+  if(!chartEl || !tableEl) return;
+  const items=(data.items || []).slice();
+  const growthRank=items.filter(x=>typeof x.latest==='number').sort((a,b)=>(b.latest||-999)-(a.latest||-999));
+
+  const growthChart=(arr)=>{
+    const valid=arr.slice();
+    const w=520,h=Math.max(380, 22*valid.length+60),padL=95,padR=55,padT=18,padB=26;
+    const max=Math.max(10,...valid.map(x=>Math.abs(x.latest||0)));
+    let svg=`<svg class='export-svg tall' viewBox='0 0 ${w} ${h}' preserveAspectRatio='none'>`;
+    valid.forEach((it,i)=>{
+      const y=padT+i*22;
+      const val=it.latest||0;
+      const bw=Math.abs(val)*(w-padL-padR)/(max*1.12);
+      const color=val>=0?'#8aff8a':'#ff8585';
+      svg+=`<text x='8' y='${y+14}' fill='#d7e7ff' font-size='11'>${i+1}. ${escapeHtml(it.name)}</text>`;
+      svg+=`<rect x='${padL}' y='${y+3}' width='${Math.max(2,bw)}' height='13' rx='3' fill='${color}'/>`;
+      svg+=`<text x='${padL+bw+5}' y='${y+14}' fill='${color}' font-size='11'>${val>0?'+':''}${val}%</text>`;
+    });
+    svg+='</svg>';
+    return svg;
+  };
+
+  const amountRank=items.filter(x=>typeof x.latestAmount==='number').sort((a,b)=>(b.latestAmount||0)-(a.latestAmount||0));
+  const tableRows=amountRank.map((it,i)=>`<tr onclick='SELECTED_EXPORT_ITEM="${escapeHtml(it.key)}";renderExportTrend(LAST_EXPORT_DATA,"${escapeHtml(it.key)}")' style='cursor:pointer'><td>${i+1}</td><td>${escapeHtml(it.name)}</td><td>${Number(it.latestAmount).toLocaleString()} 백만$</td><td class='${it.latest>=0?'trend-up':'trend-down'}'>${typeof it.latest==='number'?(it.latest>0?'+':'')+it.latest+'%':'-'}</td></tr>`).join('');
+
+  chartEl.innerHTML=`<div class='export-chartbox' style='margin-top:0'><h3>최근월 증감률 순위</h3>${growthChart(growthRank)}<div class='meta'>증감률은 보조지표입니다. 금액이 작은 품목의 급등률은 품목 상세에서 금액 흐름을 같이 확인합니다.</div></div>`;
+  tableEl.innerHTML=`<table class='export-table'><thead><tr><th>순위</th><th>품목</th><th>수출액</th><th>증감률</th></tr></thead><tbody>${tableRows}</tbody></table>`;
+}
+
+function renderExportItemTable(data){
+  const el=document.getElementById("exportItemTable"); if(!el) return;
+  const items=(data.items || []).slice().sort((a,b)=>(a.rank||999)-(b.rank||999));
+  let html=`<table class='export-table'><thead><tr><th>순번</th><th>품목</th><th>최근월 금액</th><th>최근월 증감률</th><th>3개월 평균</th><th>전월대비 변화</th><th>해석</th></tr></thead><tbody>`;
+  items.forEach(it=>{const acc=it.acceleration||0; html+=`<tr><td>${it.rank||''}</td><td>${escapeHtml(it.name)}</td><td>${typeof it.latestAmount==='number'?Number(it.latestAmount).toLocaleString()+' 백만$':'-'}</td><td class='${it.latest>=0?'trend-up':'trend-down'}'>${typeof it.latest==='number'?(it.latest>0?'+':'')+it.latest+'%':'-'}</td><td>${typeof it.avg3==='number'?(it.avg3>0?'+':'')+it.avg3+'%':'-'}</td><td class='${acc>0?'trend-up':acc<0?'trend-down':'trend-flat'}'>${typeof acc==='number'?(acc>0?'+':'')+acc:'-'}</td><td>${escapeHtml(it.comment||'')}</td></tr>`;});
+  html+='</tbody></table>';
+  el.innerHTML=html;
+}
+
+function renderExportRegion(data){
+  const countryChart=document.getElementById("exportCountryChart");
+  const countryTable=document.getElementById("exportCountryTable");
+  const regionChart=document.getElementById("exportRegionChart");
+  const regionTable=document.getElementById("exportRegionTable");
+
+  const renderGroup=(chart, table, title, rows, nameLabel)=>{
+    if(!chart || !table) return;
+    rows=(rows || []).slice();
+    const numericRows=rows.filter(r=>typeof r.latest==='number').sort((a,b)=>(b.latest||0)-(a.latest||0));
+    if(!numericRows.length){
+      chart.innerHTML=`<h3>${escapeHtml(title)}</h3><div class='emptybox'>${rows.length ? '표 영역은 준비됨. 현재 수치 미연동 상태입니다.' : '아직 구조화된 '+escapeHtml(nameLabel)+' 데이터가 없습니다.'}<br>PDF 27쪽 이하 ${escapeHtml(nameLabel)}별 수출표가 연결되면 이 칸에 금액/증감률이 표시됩니다.</div>`;
+      if(rows.length){
+        table.innerHTML=`<table class='export-table'><thead><tr><th>${escapeHtml(nameLabel)}</th><th>최근월</th><th>상태</th></tr></thead><tbody>${rows.map(r=>`<tr><td>${escapeHtml(r.name)}</td><td>-</td><td>${escapeHtml(r.comment||'PDF 표 수치 연결 대기')}</td></tr>`).join('')}</tbody></table>`;
+      }else{
+        table.innerHTML=`<div class='meta'>표시 기준: 최신월 금액/증감률. 임의 예시 데이터는 표시하지 않습니다.</div>`;
+      }
+      return;
+    }
+    rows=numericRows;
+    const w=520,h=Math.max(230, 26*rows.length+50),padL=95,padR=35,padT=14,padB=28;
+    const max=Math.max(10,...rows.map(r=>Math.abs(r.latest||0)));
+    let svg=`<svg class='export-svg small' viewBox='0 0 ${w} ${h}' preserveAspectRatio='none'>`;
+    rows.forEach((r,i)=>{const y=padT+i*26; const val=r.latest||0; const bw=Math.abs(val)*(w-padL-padR)/(max*1.15); const x0=padL; const color=val>=0?'#8aff8a':'#ff8585'; svg+=`<text x='8' y='${y+16}' fill='#d7e7ff' font-size='12'>${escapeHtml(r.name)}</text><rect x='${x0}' y='${y+4}' width='${Math.max(2,bw)}' height='15' rx='3' fill='${color}'/><text x='${x0+bw+6}' y='${y+16}' fill='${color}' font-size='12'>${val>0?'+':''}${val}%</text>`;});
+    svg+='</svg>';
+    chart.innerHTML=`<h3>${escapeHtml(title)}</h3>${svg}`;
+    table.innerHTML=`<table class='export-table'><thead><tr><th>${escapeHtml(nameLabel)}</th><th>수출액</th><th>증감률</th><th>해석</th></tr></thead><tbody>${rows.map(r=>`<tr><td>${escapeHtml(r.name)}</td><td>${typeof r.amount==='number'?Number(r.amount).toLocaleString()+'억$':'-'}</td><td class='${r.latest>=0?'trend-up':'trend-down'}'>${r.latest>0?'+':''}${r.latest}%</td><td>${escapeHtml(r.comment||'')}</td></tr>`).join('')}</tbody></table>`;
+  };
+
+  renderGroup(countryChart, countryTable, '국가별 최신월 수출 증가율', data.countries || [], '국가');
+  renderGroup(regionChart, regionTable, '지역별 최신월 수출 증가율', data.regions || [], '지역');
+}
+
+function renderExportNewsBridge(data){
+  const el=document.getElementById("exportNewsBridge"); if(!el) return;
+  const items=(data.items || []).slice().sort((a,b)=>(b.score||0)-(a.score||0)).slice(0,8);
+  el.innerHTML = items.map(it=>`<div style='margin-bottom:8px'><b>${escapeHtml(it.name)}</b> → ${(it.newsKeywords||it.themes||[]).map(k=>`<span class='pill'>${escapeHtml(k)}</span>`).join('')} <button onclick='searchExportKeyword("${escapeHtml((it.newsKeywords||it.themes||[it.name])[0])}")' style='padding:5px 9px;font-size:12px'>뉴스검색으로 보내기</button></div>`).join('');
+}
+
+function searchExportKeyword(kw){
+  showTab('searchTab', document.querySelector('.tabbtn'));
+  document.getElementById('extraKeywords').value = kw;
+  clearResultsOnly();
+  document.getElementById('extraKeywords').scrollIntoView({behavior:'smooth',block:'center'});
+}
 
 function safeId(s){
   return btoa(unescape(encodeURIComponent(String(s || ""))))
@@ -996,12 +1397,15 @@ def yahoo_chart(symbol, days=30, interval="1d"):
 
 def market_snapshot():
     symbols = [
-        {"key": "nasdaq", "name": "나스닥", "symbol": "^IXIC", "days": 30, "unit": ""},
-        {"key": "dxy", "name": "달러지수", "symbol": "DX-Y.NYB", "days": 30, "unit": ""},
-        {"key": "usdkrw", "name": "원달러환율", "symbol": "KRW=X", "days": 30, "unit": "원"},
-        {"key": "us10y", "name": "미국10년물 국채금리", "symbol": "^TNX", "days": 30, "unit": "%"},
-        {"key": "wti", "name": "WTI 유가", "symbol": "CL=F", "days": 30, "unit": "$"},
-        {"key": "gold", "name": "금", "symbol": "GC=F", "days": 30, "unit": "$"},
+        {"category":"미국시장", "key": "nasdaq", "name": "나스닥", "symbol": "^IXIC", "days": 30, "unit": ""},
+        {"category":"미국시장", "key": "sp500", "name": "S&P500", "symbol": "^GSPC", "days": 30, "unit": ""},
+        {"category":"미국시장", "key": "dow", "name": "다우", "symbol": "^DJI", "days": 30, "unit": ""},
+        {"category":"금리/환율", "key": "dxy", "name": "달러지수", "symbol": "DX-Y.NYB", "days": 30, "unit": ""},
+        {"category":"금리/환율", "key": "usdkrw", "name": "원달러환율", "symbol": "KRW=X", "days": 30, "unit": "원"},
+        {"category":"금리/환율", "key": "us10y", "name": "미국10년물 국채금리", "symbol": "^TNX", "days": 30, "unit": "%"},
+        {"category":"원자재/코인", "key": "wti", "name": "WTI 유가", "symbol": "CL=F", "days": 30, "unit": "$"},
+        {"category":"원자재/코인", "key": "gold", "name": "금", "symbol": "GC=F", "days": 30, "unit": "$"},
+        {"category":"원자재/코인", "key": "bitcoin", "name": "비트코인", "symbol": "BTC-USD", "days": 30, "unit": "$"},
     ]
     items = []
     errors = []
@@ -1331,83 +1735,348 @@ def breaking_snapshot(period_value=12, period_unit="h", max_per_topic=20):
     }
 
 
+
+# ---------------- 산업부 수출입 리포트 분석 ----------------
+EXPORT_THEME_MAP = {
+    "semiconductor": {"name":"반도체", "themes":["HBM","AI서버","메모리","반도체장비"], "news":["반도체","HBM","SK하이닉스","삼성전자"]},
+    "cosmetics": {"name":"화장품", "themes":["K뷰티","ODM","미국수출","아마존"], "news":["화장품","K뷰티","코스맥스","한국콜마","APR"]},
+    "ship": {"name":"선박", "themes":["조선","LNG선","수주","해양플랜트"], "news":["조선","선박","HD현대중공업","한화오션"]},
+    "power": {"name":"전력기기", "themes":["변압기","전선","전력망","데이터센터"], "news":["전력기기","변압기","전선","전력망"]},
+    "auto": {"name":"자동차", "themes":["완성차","부품","친환경차","북미"], "news":["자동차","현대차","기아","자동차부품"]},
+    "battery": {"name":"이차전지", "themes":["배터리","양극재","리튬","전기차"], "news":["이차전지","배터리","양극재","리튬"]},
+    "bio": {"name":"바이오헬스", "themes":["제약","의료기기","CDMO","미용의료"], "news":["바이오","제약","의료기기","CDMO"]},
+    "display": {"name":"디스플레이", "themes":["OLED","IT패널","애플","장비"], "news":["디스플레이","OLED","패널"]},
+    "steel": {"name":"철강", "themes":["철강","후판","관세","건설"], "news":["철강","후판","관세"]},
+    "petrochem": {"name":"석유화학", "themes":["화학","스프레드","나프타","중국수요"], "news":["석유화학","화학","나프타"]},
+    "food": {"name":"농수산식품", "themes":["K푸드","라면","김","냉동식품"], "news":["K푸드","라면","김 수출","식품"]},
+    "wireless": {"name":"무선통신기기", "themes":["스마트폰","부품","통신장비","XR"], "news":["무선통신기기","스마트폰","통신장비"]}
+}
+
+def export_data_path():
+    return export_latest_path()
+
+def export_reports_dir():
+    d=os.path.join(app_dir(), "data", "export_reports")
+    os.makedirs(d, exist_ok=True)
+    return d
+
+def export_latest_path():
+    return os.path.join(export_reports_dir(), "export_latest.json")
+
+def confirmed_export_report():
+    """사용자가 제공한 산업부 표 이미지에서 확인된 15개 품목 데이터만 사용.
+    임의 추정값/예시값은 넣지 않는다.
+    단위: 백만 달러, 증감률: %
+    """
+    months=["25.5","26.3","26.4","26.5"]
+    rows=[
+        (1,"semiconductor","반도체", [(13794,-21.2),(32829,151.4),(31895,173.5),(37157,169.4)], ["HBM","AI서버","메모리","반도체장비"], ["반도체","HBM","AI반도체","SK하이닉스","삼성전자"]),
+        (2,"petroleum","석유제품", [(3581,-20.8),(6135,86.1),(5106,39.9),(5250,46.6)], ["정유","유가","정제마진"], ["석유제품","정유","유가"]),
+        (3,"petrochem","석유화학", [(3329,-17.5),(4004,9.5),(4096,7.9),(3698,11.1)], ["화학","나프타","스프레드"], ["석유화학","화학","나프타"]),
+        (4,"auto","자동차", [(6198,-4.5),(6369,2.2),(6166,-5.5),(5833,-5.9)], ["완성차","친환경차","북미"], ["자동차","현대차","기아"]),
+        (5,"machinery","일반기계", [(4072,-5.2),(3891,-6.4),(4209,-2.6),(3817,-6.3)], ["기계","설비투자","산업재"], ["일반기계","기계"]),
+        (6,"steel","철강제품", [(2084,-8.8),(2054,-0.3),(2145,-9.3),(2039,-2.1)], ["철강","후판","관세"], ["철강","후판","관세"]),
+        (7,"autoparts","자동차부품", [(1654,-9.4),(1786,-2.3),(1894,-6.0),(1613,-2.5)], ["자동차부품","전장","완성차 밸류체인"], ["자동차부품","전장"]),
+        (8,"display","디스플레이", [(1341,-17.9),(1439,-1.5),(1285,-2.7),(1466,9.4)], ["OLED","패널","IT기기"], ["디스플레이","OLED","패널"]),
+        (9,"wireless","무선통신기기", [(1295,3.9),(1786,43.4),(1620,11.6),(1459,12.6)], ["스마트폰","통신장비","XR"], ["무선통신기기","스마트폰","통신장비"]),
+        (10,"ship","선박", [(2239,4.6),(3525,10.8),(2890,43.8),(2613,16.7)], ["조선","LNG선","수주"], ["조선","선박","HD현대중공업","한화오션"]),
+        (11,"biohealth","바이오헬스", [(1371,6.6),(1523,6.4),(1639,18.3),(1442,5.2)], ["제약","의료기기","CDMO"], ["바이오","제약","의료기기"]),
+        (12,"computer","컴퓨터", [(1070,2.3),(3417,189.1),(4083,515.8),(4179,290.7)], ["SSD","AI서버","데이터센터"], ["컴퓨터","SSD","데이터센터","AI서버"]),
+        (13,"textile","섬유", [(913,-11.2),(928,4.9),(1051,6.3),(853,-6.6)], ["섬유","의류","소비재"], ["섬유","의류"]),
+        (14,"battery","이차전지", [(524,-18.5),(819,28.6),(653,-6.5),(688,31.4)], ["배터리","양극재","전기차"], ["이차전지","배터리","양극재"]),
+        (15,"home_appliance","가전", [(612,-15.0),(588,-7.9),(565,-20.0),(479,-21.7)], ["가전","소비재","북미"], ["가전","LG전자"]),
+        # 아래 5개는 보고서 본문에 공개된 최신월 수치로 보완. 이전월 표 수치는 자동 PDF 추출 단계에서 채운다.
+        (16,"nonferrous","비철금속", [(None,None),(None,None),(None,None),(1700,41.0)], ["비철금속","구리","알루미늄"], ["비철금속","구리","알루미늄"]),
+        (17,"electrical","전기기기", [(None,None),(None,None),(None,None),(1300,-2.0)], ["전력기기","변압기","전선"], ["전기기기","전력기기","변압기","전선"]),
+        (18,"cosmetics","화장품", [(None,None),(None,None),(None,None),(1180,24.2)], ["K뷰티","ODM","미국수출"], ["화장품","K뷰티","코스맥스","한국콜마","APR"]),
+        (19,"agri_food","농수산식품", [(None,None),(None,None),(None,None),(1070,4.7)], ["식품","K푸드","농산가공품"], ["농수산식품","K푸드","라면","김"]),
+        (20,"living","생활용품", [(None,None),(None,None),(None,None),(700,-5.0)], ["생활용품","소비재"], ["생활용품","소비재"]),
+    ]
+    items=[]
+    for rank,key,name,vals,themes,news in rows:
+        amounts=[a for a,g in vals]
+        growth=[g for a,g in vals]
+        latest=next((g for a,g in reversed(vals) if isinstance(g,(int,float))), None)
+        latest_amount=next((a for a,g in reversed(vals) if isinstance(a,(int,float))), None)
+        numeric_growth=[g for g in growth if isinstance(g,(int,float))]
+        avg3=round(sum(numeric_growth[-3:])/len(numeric_growth[-3:]),1) if numeric_growth else None
+        prev = numeric_growth[-2] if len(numeric_growth)>=2 else None
+        acceleration=round(latest-prev,1) if isinstance(latest,(int,float)) and isinstance(prev,(int,float)) else None
+        amount_score=min(35, (latest_amount or 0)/37157*35)
+        growth_score=max(0,min(45,((latest or 0)+30)/320*45))
+        accel_score=max(0,min(20,(((acceleration if acceleration is not None else 0)+30)/120)*20))
+        score=round(amount_score+growth_score+accel_score,1)
+        if isinstance(latest_amount,(int,float)) and latest_amount >= 10000 and (latest or 0) > 0:
+            comment="규모와 증가율이 모두 강한 핵심 품목"
+        elif (latest or 0) > 50:
+            comment="증가율 강세. 규모와 지속성 확인 필요"
+        elif (latest or 0) > 0:
+            comment="증가세 유지. 전월 대비 흐름 확인"
+        else:
+            comment="감소세. 회복 전까지 보수적 관찰"
+        items.append({
+            "rank":rank,"key":key,"name":name,
+            "amounts":amounts,"monthly":growth,
+            "latest":latest,"latestAmount":latest_amount,
+            "avg3":avg3,"acceleration":acceleration,"score":score,
+            "themes":themes,"newsKeywords":news,"comment":comment
+        })
+    return {
+        "ok":True,
+        "dataVerified":True,
+        "dataScope":"산업부 20대 주요 수출 품목 + 5월 국가/지역별 수출 요약 데이터",
+        "source":"산업통상자원부·KITA 공개 요약 기반 데이터",
+        "reportMonth":"2026-05",
+        "title":"20대 주요 수출 품목 규모 및 증감률",
+        "url":"",
+        "publishedDate":"",
+        "generatedAt":datetime.now(KST).strftime("%Y-%m-%d %H:%M:%S"),
+        "statusMessage":"저장된 표 기반 수출입 데이터 표시",
+        "headline":"메인 기준은 절대 수출금액입니다. 반도체가 압도적 1위이며, 국가별로는 중국·미국·아세안 3대 지역 수출 증가가 두드러집니다.",
+        "metrics":{"exportAmount":"-","exportYoY":"표 미확인","importAmount":"-","importYoY":"-","balance":"-","balanceComment":"전체 수출입 원문 수치 미연동"},
+        "months":months,
+        "items":items,
+        "countries":[
+            {"name":"중국","amount":189.0,"latest":80.9,"comment":"반도체가 세 자릿수 증가하고 농수산식품·화장품 등 소비재도 양호해 최대 수출지역으로 급증"},
+            {"name":"미국","amount":160.0,"latest":59.0,"comment":"AI·반도체·컴퓨터 수요와 북미 소비재 흐름이 함께 강한 핵심 시장"},
+            {"name":"아세안","amount":159.0,"latest":58.0,"comment":"중국·미국과 함께 3대 수출축. 반도체·IT·중간재 수요 회복 확인"},
+            {"name":"EU","amount":62.0,"latest":2.0,"comment":"플러스는 유지했지만 증가율은 낮아 상대적으로 둔한 지역"},
+            {"name":"중남미","amount":32.0,"latest":43.0,"comment":"규모는 작지만 증가율이 높아 시장 다변화 관점에서 관심"},
+            {"name":"일본","amount":27.0,"latest":12.0,"comment":"완만한 증가. 소재·부품·중간재 흐름 추적 필요"},
+            {"name":"인도","amount":20.0,"latest":25.0,"comment":"규모는 아직 작지만 성장률이 높아 중장기 확장 시장으로 분류"}
+        ],
+        "regions":[
+            {"name":"중화권","amount":189.0,"latest":80.9,"comment":"중국향 반도체 급증이 전체 수출 증가를 강하게 견인"},
+            {"name":"북미","amount":160.0,"latest":59.0,"comment":"미국 중심 AI·IT 수요와 소비재 수출 흐름이 강함"},
+            {"name":"동남아","amount":159.0,"latest":58.0,"comment":"아세안향 중간재·IT 수출 회복으로 주요 성장축 형성"},
+            {"name":"유럽","amount":62.0,"latest":2.0,"comment":"EU는 증가폭이 제한적이라 다른 지역 대비 모멘텀 약함"},
+            {"name":"중남미","amount":32.0,"latest":43.0,"comment":"고성장 지역으로 분류되지만 절대 규모는 아직 작음"},
+            {"name":"일본·인도","amount":47.0,"latest":17.5,"comment":"일본 27억 달러(+12%)와 인도 20억 달러(+25%)를 묶은 보조 성장권"}
+        ]
+    }
+
+def sample_export_report():
+    # 호환용 이름. 실제로는 임의 예시가 아니라 확인된 표 기반 데이터만 반환한다.
+    return confirmed_export_report()
+
+def _valid_iso_date(s):
+    try:
+        if not re.fullmatch(r"20\d{2}-\d{2}-\d{2}", s or ""):
+            return False
+        dt=datetime.strptime(s, "%Y-%m-%d").replace(tzinfo=KST)
+        now=datetime.now(KST)
+        if dt.year < 2020 or dt > now + timedelta(days=1):
+            return False
+        return True
+    except Exception:
+        return False
+
+def _make_iso_date(y, m, d):
+    try:
+        y=int(y); m=int(m); d=int(d)
+        dt=datetime(y,m,d,tzinfo=KST)
+        s=dt.strftime("%Y-%m-%d")
+        return s if _valid_iso_date(s) else ""
+    except Exception:
+        return ""
+
+def parse_motie_latest_export_post():
+    """산업부 보도·참고자료 목록에서 최신 '수출입 동향' 글을 찾는다.
+    핵심 수정:
+    - 게시글 번호(예: 20512253)를 날짜로 변환하지 않는다.
+    - 날짜는 YYYY-MM-DD 또는 YYYY.MM.DD 형태만 인정한다.
+    - 2021년 같은 오래된 검색 결과는 최신 자료로 채택하지 않는다.
+    """
+    from urllib.parse import urljoin
+
+    base="https://www.motir.go.kr/kor/article/ATCL3f49a5a8c"
+    urls=[base]
+    urls += [f"{base}?pageIndex={i}" for i in range(1, 11)]
+    errors=[]
+    candidates=[]
+
+    def add_candidate(title, href, date_text):
+        title=re.sub(r"\s+", " ", strip_tags(title or "")).strip()
+        if not ("수출입" in title and "동향" in title):
+            return
+        # ICT 수출입 동향은 별도 통계라 제외
+        if "ICT" in title.upper() or "정보통신" in title:
+            return
+        dm=re.search(r"(20\d{2})[.\-/년\s]+(\d{1,2})[.\-/월\s]+(\d{1,2})", date_text or "")
+        if not dm:
+            return
+        published=_make_iso_date(dm.group(1), dm.group(2), dm.group(3))
+        if not published:
+            return
+        # 너무 오래된 검색결과는 최신 판단에서 제외
+        if published < "2025-01-01":
+            return
+        candidates.append({"title":title,"url":href,"publishedDate":published})
+
+    for url in urls:
+        try:
+            html=http_get(url, timeout=12).decode("utf-8", errors="replace")
+            if "수출입" not in html:
+                continue
+            # 목록 페이지는 제목 주변 2000자 안에 등록일이 같이 있다.
+            for m in re.finditer(r"<a[^>]+href=[\'\"]([^\'\"]+)[\'\"][^>]*>(.*?)</a>", html, flags=re.I|re.S):
+                href=urljoin(url, m.group(1))
+                title_html=m.group(2)
+                title=strip_tags(title_html)
+                if "수출입" not in title or "동향" not in title:
+                    continue
+                near=strip_tags(html[m.start():m.start()+2200])
+                add_candidate(title, href, near)
+
+            # 웹 렌더링/접근성 텍스트에 제목과 날짜가 풀린 경우 보완
+            plain=strip_tags(html)
+            for m in re.finditer(r"((?:20\d{2}년\s*)?\d{1,2}월\s*수출입\s*동향|20\d{2}년\s*\d{1,2}월\s*수출입\s*동향).*?(20\d{2})[.\-/년\s]+(\d{1,2})[.\-/월\s]+(\d{1,2})", plain, flags=re.S):
+                title=re.sub(r"\s+", " ", m.group(1)).strip()
+                add_candidate(title, url, m.group(0))
+        except Exception as e:
+            errors.append(f"{url} -> {e}")
+
+    if candidates:
+        # 같은 글 중복 제거 후 등록일 최신순
+        uniq={}
+        for c in candidates:
+            k=(c["title"], c["publishedDate"])
+            uniq[k]=c
+        arr=list(uniq.values())
+        arr.sort(key=lambda c:c["publishedDate"], reverse=True)
+        return arr[0]
+
+    raise RuntimeError("산업부 최신 수출입 동향 확인 실패: " + " | ".join(errors[-3:]))
+
+def load_saved_export_report():
+    path=export_data_path()
+    if os.path.exists(path):
+        try:
+            with open(path,"r",encoding="utf-8") as f:
+                data=json.load(f)
+            # 이전 버전에서 잘못 저장된 2051-22-53, 2021년 자료 등은 폐기
+            pd=data.get("publishedDate","")
+            title=str(data.get("title","") or "")
+            if pd and not _valid_iso_date(pd):
+                raise ValueError("invalid saved publishedDate")
+            if "2021" in title or "21년" in title or "2051" in str(pd):
+                raise ValueError("stale/wrong saved export report")
+            data["ok"]=True
+            return data
+        except Exception:
+            log_error("export report load discarded or failed\n"+traceback.format_exc())
+    data=sample_export_report()
+    try:
+        with open(path,"w",encoding="utf-8") as f:
+            json.dump(data,f,ensure_ascii=False,indent=2)
+    except Exception:
+        pass
+    return data
+
+def export_report_snapshot(force=False):
+    """안정형 수출입 대시보드.
+    산업부 PDF viewer 직접 다운로드는 현재 사이트 구조/인증서 문제로 불안정하므로 실행하지 않는다.
+    대신 확인된 표 기반 데이터(confirmed_export_report)를 JSON으로 저장하고 웹페이지에 표시한다.
+    최신 게시물 메타 정보는 가능할 때만 갱신하고, 실패해도 데이터 화면은 깨지지 않는다.
+    """
+    data=load_saved_export_report()
+    if not data:
+        data=sample_export_report()
+    try:
+        latest=parse_motie_latest_export_post()
+        data.update({
+            "ok":True,
+            "source":"산업통상자원부",
+            "url":latest.get("url", data.get("url", "")),
+            "latestPost":latest,
+            "generatedAt":datetime.now(KST).strftime("%Y-%m-%d %H:%M:%S"),
+            "statusMessage":"수출입 표 기반 데이터 표시 / 최신 게시물 확인 완료",
+            "analysisMode":"stable_json",
+            "usedSavedData":True,
+            "runDetail":"검증된 표 기반 JSON 데이터를 표시합니다. 산업부 PDF 직접 자동다운로드는 현재 viewer 구조가 불안정하여 제외했습니다."
+        })
+    except Exception as e:
+        data.update({
+            "ok":True,
+            "generatedAt":datetime.now(KST).strftime("%Y-%m-%d %H:%M:%S"),
+            "statusMessage":"수출입 표 기반 데이터 표시 / 산업부 최신 게시물 확인 생략: "+str(e),
+            "analysisMode":"stable_json",
+            "usedSavedData":True,
+            "runDetail":"산업부 최신 게시물 확인은 실패했지만, 검증된 표 기반 데이터는 정상 표시합니다. PDF 자동추출은 사용하지 않습니다."
+        })
+    try:
+        path=export_data_path()
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        with open(path,"w",encoding="utf-8") as f:
+            json.dump(data,f,ensure_ascii=False,indent=2)
+    except Exception:
+        pass
+    return data
+
 class Handler(BaseHTTPRequestHandler):
     def send_content(self,status,content,ctype="text/html; charset=utf-8"):
-        if isinstance(content,str):
-            content=content.encode("utf-8")
-        self.send_response(status)
-        self.send_header("Content-Type",ctype)
-        self.send_header("Content-Length",str(len(content)))
-        self.send_header("Cache-Control","no-store")
-        self.end_headers()
-        self.wfile.write(content)
-
-    def send_json(self, status, payload):
-        try:
-            content=json.dumps(payload, ensure_ascii=False)
-        except Exception as e:
-            content=json.dumps({"ok":False,"error":"json encode failed: "+str(e)}, ensure_ascii=False)
-        self.send_content(status, content, "application/json; charset=utf-8")
-
+        if isinstance(content,str): content=content.encode("utf-8")
+        self.send_response(status); self.send_header("Content-Type",ctype); self.send_header("Content-Length",str(len(content))); self.send_header("Cache-Control","no-store"); self.end_headers(); self.wfile.write(content)
     def do_GET(self):
-        try:
-            if self.path=="/" or self.path.startswith("/index"):
-                self.send_content(200, HTML.replace("__DEFAULT_KEYWORDS__", json.dumps(DEFAULT_KEYWORDS,ensure_ascii=False)))
-                return
-
-            if self.path.startswith("/health"):
-                self.send_json(200, {"ok": True, "status": "alive", "kiwiAvailable": KIWI_AVAILABLE})
-                return
-
-            if self.path.startswith("/api/market"):
-                self.send_json(200, market_snapshot())
-                return
-
-            if self.path.startswith("/api/dictionary"):
-                self.send_json(200, {"ok": True, "data": load_event_dictionary()})
-                return
-
-            if self.path.startswith("/api/breaking"):
+        if self.path=="/" or self.path.startswith("/index"):
+            self.send_content(200, HTML.replace("__DEFAULT_KEYWORDS__", json.dumps(DEFAULT_KEYWORDS,ensure_ascii=False)))
+        elif self.path.startswith("/api/export-report"):
+            try:
                 from urllib.parse import urlparse, parse_qs
                 qs=parse_qs(urlparse(self.path).query)
-                pv=qs.get("value",["12"])[0]
-                pu=qs.get("unit",["h"])[0]
-                mr=qs.get("max",["20"])[0]
-                self.send_json(200, breaking_snapshot(pv,pu,mr))
-                return
-
+                force=qs.get("force",["0"])[0] in ("1","true","yes")
+                self.send_content(200, json.dumps(export_report_snapshot(force), ensure_ascii=False), "application/json; charset=utf-8")
+            except Exception as e:
+                log_error(traceback.format_exc())
+                self.send_content(500, json.dumps({"ok":False,"error":str(e)}, ensure_ascii=False), "application/json; charset=utf-8")
+        elif self.path.startswith("/api/market"):
+            try:
+                self.send_content(200, json.dumps(market_snapshot(), ensure_ascii=False), "application/json; charset=utf-8")
+            except Exception as e:
+                log_error(traceback.format_exc())
+                self.send_content(500, json.dumps({"ok": False, "error": str(e)}, ensure_ascii=False), "application/json; charset=utf-8")
+        elif self.path.startswith("/api/dictionary"):
+            try:
+                self.send_content(200, json.dumps({"ok": True, "data": load_event_dictionary()}, ensure_ascii=False), "application/json; charset=utf-8")
+            except Exception as e:
+                log_error(traceback.format_exc())
+                self.send_content(500, json.dumps({"ok": False, "error": str(e)}, ensure_ascii=False), "application/json; charset=utf-8")
+        elif self.path.startswith("/api/breaking"):
+            try:
+                from urllib.parse import urlparse, parse_qs
+                qs = parse_qs(urlparse(self.path).query)
+                pv = qs.get("value", ["12"])[0]
+                pu = qs.get("unit", ["h"])[0]
+                mr = qs.get("max", ["20"])[0]
+                self.send_content(200, json.dumps(breaking_snapshot(pv, pu, mr), ensure_ascii=False), "application/json; charset=utf-8")
+            except Exception as e:
+                log_error(traceback.format_exc())
+                self.send_content(500, json.dumps({"ok": False, "error": str(e)}, ensure_ascii=False), "application/json; charset=utf-8")
+        else:
             self.send_content(404,"Not found","text/plain; charset=utf-8")
-        except Exception as e:
-            log_error(traceback.format_exc())
-            self.send_json(500, {"ok":False,"error":str(e),"trace":traceback.format_exc()})
-
     def do_POST(self):
         try:
             length=int(self.headers.get("Content-Length","0"))
-            raw=self.rfile.read(length).decode("utf-8") if length else "{}"
-            payload=json.loads(raw or "{}")
+            payload=json.loads(self.rfile.read(length).decode("utf-8") or "{}")
 
-            if self.path=="/api/search":
-                self.send_json(200, search_all(payload))
+            if self.path == "/api/search":
+                self.send_content(200,json.dumps(search_all(payload),ensure_ascii=False),"application/json; charset=utf-8")
                 return
 
-            if self.path=="/api/dictionary/add":
-                data=add_event_keyword(
+            if self.path == "/api/dictionary/add":
+                data = add_event_keyword(
                     payload.get("category",""),
                     payload.get("keyword",""),
                     payload.get("impact",70),
                     payload.get("novelty",20)
                 )
-                self.send_json(200, {"ok":True,"data":data})
+                self.send_content(200, json.dumps({"ok": True, "data": data}, ensure_ascii=False), "application/json; charset=utf-8")
                 return
 
-            self.send_json(404, {"ok":False,"error":"not found","path":self.path})
+            self.send_content(404,json.dumps({"ok":False,"error":"not found"},ensure_ascii=False),"application/json; charset=utf-8")
         except Exception as e:
-            log_error(traceback.format_exc())
-            self.send_json(500, {"ok":False,"error":str(e),"trace":traceback.format_exc()})
-
-    def log_message(self, fmt, *args):
-        return
+            log_error(traceback.format_exc()); self.send_content(500,json.dumps({"ok":False,"error":str(e)},ensure_ascii=False),"application/json; charset=utf-8")
+    def log_message(self, fmt, *args): return
 
 def open_browser(url):
     time.sleep(1)
@@ -1416,30 +2085,26 @@ def open_browser(url):
 
 def main():
     os.chdir(app_dir())
-
-    if os.environ.get("RENDER") or os.environ.get("PORT"):
-        host = "0.0.0.0"
-        port = int(os.environ.get("PORT", "10000"))
-        open_url = None
-    else:
-        host = HOST
-        port = find_free_port()
-        open_url = f"http://{host}:{port}/"
-
-    server=ThreadingHTTPServer((host,port),Handler)
-    url=f"http://{host}:{port}/"
-
-    if open_url:
-        threading.Thread(target=open_browser,args=(open_url,),daemon=True).start()
-
+    env_port = os.environ.get("PORT")
+    port = int(env_port) if env_port else find_free_port()
+    server=ThreadingHTTPServer((HOST,port),Handler)
+    display_host = "127.0.0.1" if HOST in ("0.0.0.0", "::") else HOST
+    url=f"http://{display_host}:{port}/"
+    # Render/클라우드에서는 브라우저 자동 실행 금지. 로컬 실행일 때만 자동으로 엽니다.
+    if not env_port:
+        threading.Thread(target=open_browser,args=(url,),daemon=True).start()
     print(APP_TITLE, flush=True)
     print("URL:", url, flush=True)
-    print("Close this window to stop server.", flush=True)
+    print("HOST:", HOST, "PORT:", port, flush=True)
     server.serve_forever()
 
 if __name__=="__main__":
-    try: main()
-    except KeyboardInterrupt: pass
+    try:
+        main()
+    except KeyboardInterrupt:
+        pass
     except Exception:
-        log_error(traceback.format_exc())
-        input("Error. Check error_log.txt. Press Enter.")
+        err = traceback.format_exc()
+        log_error(err)
+        print(err, flush=True)
+        raise
