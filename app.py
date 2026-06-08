@@ -211,17 +211,17 @@ button{background:var(--blue);color:white;border:0;border-radius:10px;padding:12
 <input id="breakingValue" type="number" min="1" max="30" value="12">
 <select id="breakingUnit"><option value="h" selected>시간</option><option value="d">일</option><option value="w">주</option></select>
 <select id="breakingMax"><option value="10">주제별 10개</option><option value="20" selected>주제별 20개</option><option value="50">주제별 50개</option></select>
-<button onclick="loadBreakingNews()" style="background:#246b45">내 주제 속보 새로고침</button>
-<button onclick="toggleTopicManager()" style="background:#555">⚙ 내 주제 관리</button>
+<button onclick="loadBreakingNews()" style="background:#246b45">내뉴스 새로고침</button>
+<button onclick="toggleTopicManager()" style="background:#555">⚙ 내뉴스 주제관리</button>
 <span class="meta">주제별 뉴스 건수는 내가 등록한 주제 기준입니다. 같은 제목/링크 뉴스는 중복 제거됩니다.</span>
 </div>
-<div id="breakingStatus" class="meta" style="margin-top:10px">속보 탭을 열면 내 주제 요약 카드가 표시됩니다. 카드를 클릭하면 뉴스가 펼쳐집니다.</div>
+<div id="breakingStatus" class="meta" style="margin-top:10px">속보 탭을 열면 내가 설정한 내뉴스 주제별 요약 카드가 표시됩니다. 카드를 클릭하면 뉴스가 펼쳐집니다.</div>
 </div>
 <div id="topicManagerBox" class="box hidden">
 <h2>⚙ 내 속보 주제 관리</h2>
 <div class="meta">화면에 보일 이름과 실제 검색식을 분리합니다. 예: 이름=MLCC, 검색식=MLCC OR 적층세라믹콘덴서 OR 삼성전기</div>
 <div class="topic-manager">
-  <input id="topicNameInput" type="text" placeholder="주제명 예: MLCC">
+  <input id="topicNameInput" type="text" placeholder="내뉴스 주제명 예: MLCC">
   <input id="topicQueryInput" type="text" placeholder="검색식 예: MLCC OR 적층세라믹콘덴서 OR 삼성전기">
   <input id="topicPriorityInput" type="number" min="1" max="9" value="5" title="우선순위">
   <div><button onclick="saveBreakingTopic()" style="background:#7a4cc2">저장/추가</button><button onclick="clearTopicForm()" style="background:#555">입력초기화</button></div>
@@ -233,7 +233,7 @@ button{background:var(--blue);color:white;border:0;border-radius:10px;padding:12
 <div id="topicList" class="topic-list"></div>
 </div>
 <div class="box">
-<h2>📊 내 주제별 뉴스 건수</h2>
+<h2>📊 내뉴스 주제별 뉴스 건수</h2>
 <div id="breakingTopics" class="cardgrid"></div>
 </div>
 <div class="box">
@@ -641,14 +641,14 @@ async function loadBreakingTopics(){
     const data=await res.json();
     if(!data.ok){ if(st) st.innerHTML=`<span class='err'>${escapeHtml(data.error||"주제 로드 실패")}</span>`; return; }
     renderBreakingTopicList(data.topics || []);
-    if(st) st.innerHTML=`<span class='ok'>내 주제 ${(data.topics||[]).length}개</span>`;
+    if(st) st.innerHTML=`<span class='ok'>내뉴스 주제 ${(data.topics||[]).length}개</span>`;
   }catch(e){ if(st) st.innerHTML=`<span class='err'>주제 오류: ${escapeHtml(e.message)}</span>`; }
 }
 
 function renderBreakingTopicList(topics){
   const list=document.getElementById("topicList");
   if(!list) return;
-  if(!topics.length){ list.innerHTML="<div class='emptybox'>등록된 주제가 없습니다. 기본 주제로 복원하거나 새 주제를 추가하세요.</div>"; return; }
+  if(!topics.length){ list.innerHTML="<div class='emptybox'>등록된 내뉴스 주제가 없습니다. 기본 주제로 복원하거나 새 주제를 추가하세요.</div>"; return; }
   list.innerHTML=topics.map(t=>`
     <div class='topic-row'>
       <div class='topic-name'>${escapeHtml(t.name)} ${t.enabled===false?"<span class='badge'>OFF</span>":""}</div>
@@ -699,7 +699,7 @@ async function deleteBreakingTopic(key){
 }
 
 async function resetBreakingTopics(){
-  if(!confirm('내 주제를 기본값으로 복원할까요?')) return;
+  if(!confirm('내뉴스 주제를 기본값으로 복원할까요?')) return;
   const st=document.getElementById("topicManagerStatus");
   try{
     const res=await fetch('/api/breaking-topics/reset',{method:'POST'});
@@ -735,7 +735,7 @@ async function loadBreakingNews(){
       return;
     }
 
-    status.innerHTML=`<span class="ok">${data.periodLabel} / 내 주제 ${data.topicCount||0}개 / 중복 제거 후 전체 ${data.total}건 / 업데이트 ${data.generatedAt}</span>` + (data.errors && data.errors.length ? `<br><span class="warn">${data.errors.join(" / ")}</span>` : "");
+    status.innerHTML=`<span class="ok">${data.periodLabel} / 내뉴스 주제 ${data.topicCount||0}개 / 중복 제거 후 전체 ${data.total}건 / 업데이트 ${data.generatedAt}</span>` + (data.errors && data.errors.length ? `<br><span class="warn">${data.errors.join(" / ")}</span>` : "");
 
     data.topics.forEach(t=>{
       const div=document.createElement("div");
