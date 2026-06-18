@@ -1,6 +1,6 @@
 
 # -*- coding: utf-8 -*-
-import json, os, re, socket, threading, time, traceback, webbrowser
+import json, os, re, socket, sqlite3, threading, time, traceback, webbrowser
 import xml.etree.ElementTree as ET
 from datetime import datetime, timedelta, timezone
 from email.utils import parsedate_to_datetime
@@ -150,6 +150,7 @@ button{background:var(--blue);color:white;border:0;border-radius:10px;padding:12
 .export-full{display:block}.export-row3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px;align-items:start}.export-row2{display:grid;grid-template-columns:1fr 1fr;gap:14px;align-items:start}.export-analysis-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px;align-items:start}.export-side-stack{display:grid;grid-template-columns:1fr;gap:14px}.export-chartbox{background:#0d1116;border:1px solid #344151;border-radius:12px;padding:12px;margin-top:12px}.export-chartbox h3{margin:0 0 8px;font-size:17px}
 .export-svg{width:100%;height:280px;background:#0d1116;border-radius:8px}.export-svg.tall{height:440px}.export-svg.small{height:230px}
 .export-table{width:100%;border-collapse:collapse;font-size:13px}.export-table th,.export-table td{border-bottom:1px solid #344151;padding:7px;text-align:right}.export-table th:first-child,.export-table td:first-child{text-align:left}.export-table th{color:#9fb0bf;font-weight:normal}.export-rank{display:block;margin-top:0}.export-rank-card{background:#202832;border:1px solid #344151;border-radius:12px;padding:12px}.scorebar{height:8px;background:#344151;border-radius:999px;overflow:hidden;margin-top:8px}.scorebar>span{display:block;height:100%;background:#7db1ff}.pill{display:inline-block;border:1px solid #4f77aa;border-radius:999px;padding:3px 8px;margin:2px;color:#d7e7ff;background:#26384d;font-size:12px}.emptybox{border:1px dashed #3d4a58;border-radius:12px;padding:16px;color:#9fb0bf;background:#121920;line-height:1.7}.trend-up{color:#8aff8a}.trend-down{color:#ff8585}.trend-flat{color:#aaa}@media(max-width:1100px){.export-row3,.export-row2,.export-analysis-grid{grid-template-columns:1fr}.export-svg{height:260px}}
+.report-controls{display:grid;grid-template-columns:150px 150px minmax(220px,1fr) auto auto;gap:8px;align-items:end}.report-list{display:grid;grid-template-columns:1fr;gap:10px}.report-card{background:#202832;border:1px solid #344151;border-radius:12px;padding:12px}.report-card h3{margin:0 0 6px;font-size:17px}.report-meta{display:flex;gap:8px;flex-wrap:wrap;color:#9fb0bf;font-size:12px;margin-bottom:8px}.report-chip{display:inline-block;border:1px solid #4f77aa;background:#26384d;color:#d7e7ff;border-radius:999px;padding:2px 7px;margin:2px;font-size:12px}.report-price{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:8px;margin:8px 0}.report-price div{background:#111820;border:1px solid #344151;border-radius:10px;padding:8px}.report-price span{display:block;color:#9fb0bf;font-size:12px}.report-price b{display:block;margin-top:3px;color:#d7e7ff}.report-summary{line-height:1.65;color:#dfe8f2}.report-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}.report-actions a{display:inline-block;background:#2f81f7;color:white;text-decoration:none;border-radius:9px;padding:7px 10px;font-size:13px}.report-actions button{padding:7px 10px;font-size:13px}.report-detail{margin-top:8px;border-top:1px solid #344151;padding-top:8px}.report-detail h4{margin:8px 0 4px}.report-detail ul{margin:6px 0 0 18px;padding:0}.report-detail li{margin:4px 0;line-height:1.55}.report-statbar{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:8px}.report-stat{background:#202832;border:1px solid #344151;border-radius:12px;padding:10px}.report-stat .v{font-size:22px;font-weight:bold;color:#9dccff}.report-stat .k{font-size:12px;color:#9fb0bf}@media(max-width:900px){.report-controls{grid-template-columns:1fr}.report-controls button{width:100%}}
 
 </style>
 </head>
@@ -162,6 +163,7 @@ button{background:var(--blue);color:white;border:0;border-radius:10px;padding:12
   <button class="tabbtn active" onclick="showTab('searchTab', this)">뉴스검색</button>
   <button class="tabbtn" onclick="showTab('breakingTab', this); loadBreakingNews();">속보뉴스</button>
   <button class="tabbtn" onclick="showTab('macroTab', this)">매크로</button>
+  <button class="tabbtn" onclick="showTab('reportTab', this); loadResearchReports(false);">보고서</button>
   <button class="tabbtn" onclick="showTab('exportTab', this); loadExportDashboard(false);">산업데이터</button>
   <button class="tabbtn" onclick="showTab('dictTab', this)">이벤트사전</button>
 </div>
@@ -259,12 +261,35 @@ button{background:var(--blue);color:white;border:0;border-radius:10px;padding:12
 </div>
 
 
+<div id="reportTab" class="tabcontent">
+<div class="box">
+<h2>📄 증권사 보고서 DB</h2>
+<div class="report-controls">
+  <div><div class="meta">시작일</div><input id="reportStart" type="text" placeholder="YYYY-MM-DD"></div>
+  <div><div class="meta">종료일</div><input id="reportEnd" type="text" placeholder="YYYY-MM-DD"></div>
+  <div><div class="meta">종목/키워드</div><input id="reportQuery" type="text" placeholder="삼성전자, HBM, 현대차"></div>
+  <button onclick="loadResearchReports(true)">조회</button>
+  <button onclick="clearReportFilters()" style="background:#555">최근 1일</button>
+</div>
+<div id="reportStatus" class="meta" style="margin-top:10px">보고서 탭을 열면 DB의 최근 1일 보고서를 보여줍니다.</div>
+</div>
+<div class="box">
+  <h2>📌 보고서 요약</h2>
+  <div id="reportStats" class="report-statbar"></div>
+</div>
+<div class="box">
+  <h2>🧾 보고서 목록</h2>
+  <div id="reportList" class="report-list"></div>
+</div>
+</div>
+
+
 <div id="exportTab" class="tabcontent">
 <div class="box">
 <h2>📦 산업부 수출입 리포트 분석</h2>
 <div class="row">
 <button onclick="loadExportDashboard(false)" style="background:#246b45">자료 확인 / 저장데이터 갱신</button>
-<span class="meta">현재는 검증된 표 기반 JSON 데이터를 웹페이지에 표시합니다. 산업부 PDF 직접 다운로드는 불안정하여 제외했습니다.</span>
+<span class="meta">Render 서버에서는 업로드된 SQLite DB를 읽어 수출입 품목·지역·월별 추이를 표시합니다.</span>
 </div>
 <div id="exportStatus" class="meta" style="margin-top:10px">산업데이터 탭을 열면 분석 대시보드를 불러옵니다.</div>
 <div id="exportRunLog" class="meta" style="margin-top:8px;line-height:1.7"></div>
@@ -894,6 +919,123 @@ function drawMiniChart(series){
 
 let LAST_EXPORT_DATA=null;
 let SELECTED_EXPORT_ITEM=null;
+let LAST_REPORT_DATA=null;
+
+function moneyText(v){
+  if(v===null || v===undefined || v==="") return "-";
+  const n=Number(v);
+  if(!Number.isFinite(n)) return "-";
+  return n.toLocaleString("ko-KR")+"원";
+}
+
+function pctText(v){
+  if(v===null || v===undefined || v==="") return "-";
+  const n=Number(v);
+  if(!Number.isFinite(n)) return "-";
+  return (n>0?"+":"")+n.toFixed(1)+"%";
+}
+
+function clearReportFilters(){
+  const s=document.getElementById("reportStart");
+  const e=document.getElementById("reportEnd");
+  const q=document.getElementById("reportQuery");
+  if(s) s.value="";
+  if(e) e.value="";
+  if(q) q.value="";
+  loadResearchReports(false);
+}
+
+async function loadResearchReports(useFilters){
+  const status=document.getElementById("reportStatus");
+  const list=document.getElementById("reportList");
+  if(!status || !list) return;
+  status.innerHTML="보고서 DB를 불러오는 중...";
+  try{
+    const params=new URLSearchParams();
+    if(useFilters){
+      const s=document.getElementById("reportStart").value.trim();
+      const e=document.getElementById("reportEnd").value.trim();
+      const q=document.getElementById("reportQuery").value.trim();
+      if(s) params.set("start", s);
+      if(e) params.set("end", e);
+      if(q) params.set("q", q);
+    }
+    params.set("ts", Date.now());
+    const res=await fetch(`/api/research-reports?${params.toString()}`);
+    const data=await res.json();
+    if(!data.ok){status.innerHTML=`<span class='err'>${escapeHtml(data.error || "보고서 DB 오류")}</span>`; return;}
+    LAST_REPORT_DATA=data;
+    renderResearchReports(data);
+  }catch(e){
+    status.innerHTML=`<span class='err'>보고서 DB 오류: ${escapeHtml(e.message)}</span>`;
+  }
+}
+
+function renderResearchReports(data){
+  const status=document.getElementById("reportStatus");
+  const stats=document.getElementById("reportStats");
+  const list=document.getElementById("reportList");
+  const meta=data.meta || {};
+  const reports=data.reports || [];
+  status.innerHTML=`<span class='ok'>${escapeHtml(meta.start || "-")} ~ ${escapeHtml(meta.end || "-")} / ${reports.length}건</span>` + (meta.latestDate ? ` <span class='meta'>/ 최신 보고서일 ${escapeHtml(meta.latestDate)}</span>` : "");
+  const stocks=new Set(reports.map(r=>r.stock_name).filter(Boolean));
+  const firms=new Set(reports.map(r=>r.securities_firm).filter(Boolean));
+  const targets=reports.filter(r=>r.target_price);
+  stats.innerHTML=[
+    ["보고서", reports.length+"건"],
+    ["종목", stocks.size+"개"],
+    ["증권사", firms.size+"곳"],
+    ["목표가 있음", targets.length+"건"]
+  ].map(x=>`<div class='report-stat'><div class='v'>${escapeHtml(x[1])}</div><div class='k'>${escapeHtml(x[0])}</div></div>`).join("");
+  if(!reports.length){
+    list.innerHTML="<div class='emptybox'>선택한 기간/검색어에 해당하는 보고서가 없습니다.</div>";
+    return;
+  }
+  list.innerHTML=reports.map(r=>renderResearchReportCard(r)).join("");
+}
+
+function renderResearchReportCard(r){
+  const kws=(r.keywords || []).slice(0,8).map(k=>`<span class='report-chip'>${escapeHtml(k.keyword)}</span>`).join("");
+  const reasons=(r.reasons || []).slice(0,5).map(x=>`<li><b>${escapeHtml(x.reason_keyword || x.reason_type || "근거")}</b> ${escapeHtml(x.reason_text || "")}</li>`).join("");
+  const sourceUrl=r.report_url || "";
+  const detailId=`report-detail-${r.report_id}`;
+  return `
+    <div class='report-card'>
+      <h3>${escapeHtml(r.stock_name || "-")} <span class='meta'>${escapeHtml(r.stock_code || "")}</span></h3>
+      <div class='report-meta'>
+        <span>${escapeHtml(r.report_date || "-")}</span>
+        <span>${escapeHtml(r.securities_firm || r.source || "-")}</span>
+        <span>${escapeHtml(r.analyst || "")}</span>
+        <span>${escapeHtml(r.investment_opinion || "")}</span>
+      </div>
+      <div class='report-price'>
+        <div><span>목표가</span><b>${moneyText(r.target_price)}</b></div>
+        <div><span>이전 목표가</span><b>${moneyText(r.previous_target_price)}</b></div>
+        <div><span>현재가</span><b>${moneyText(r.current_price_at_report_date)}</b></div>
+        <div><span>상승여력</span><b>${pctText(r.upside_potential)}</b></div>
+      </div>
+      <div class='report-summary'><b>${escapeHtml(r.title || "")}</b><br>${escapeHtml(r.summary || "요약이 없습니다.")}</div>
+      <div>${kws}</div>
+      <div class='report-actions'>
+        ${sourceUrl ? `<a href='${sourceUrl}' target='_blank' rel='noopener'>원문 열기</a>` : ""}
+        <button onclick='toggleReportDetail("${detailId}")' style='background:#555'>상세 보기</button>
+        <button onclick='searchExportKeyword("${escapeHtml(r.stock_name || "")}")' style='background:#246b45'>뉴스검색</button>
+      </div>
+      <div id='${detailId}' class='report-detail hidden'>
+        <h4>목표가 이유</h4>
+        <div class='meta'>${escapeHtml(r.target_price_reason || "-")}</div>
+        <h4>리스크</h4>
+        <div class='meta'>${escapeHtml(r.risk_summary || "-")}</div>
+        <h4>보고서 요약 근거</h4>
+        ${reasons ? `<ul>${reasons}</ul>` : "<div class='meta'>등록된 근거가 없습니다.</div>"}
+      </div>
+    </div>`;
+}
+
+function toggleReportDetail(id){
+  const el=document.getElementById(id);
+  if(el) el.classList.toggle("hidden");
+}
 
 async function loadExportDashboard(force){
   const status=document.getElementById("exportStatus");
@@ -1132,6 +1274,176 @@ def log_error(msg):
             f.write(str(msg))
     except Exception:
         pass
+
+def report_db_path():
+    return os.environ.get("REPORT_DB_PATH") or os.path.join(app_dir(), "data", "report_reports.db")
+
+def report_db_exists():
+    return os.path.exists(report_db_path())
+
+def db_connect():
+    con=sqlite3.connect(report_db_path())
+    con.row_factory=sqlite3.Row
+    return con
+
+def db_rows(con, sql, args=()):
+    return [dict(r) for r in con.execute(sql, args).fetchall()]
+
+def research_reports_payload(start="", end="", q="", limit=120):
+    if not report_db_exists():
+        return {"ok":False, "error":"서버에 report_reports.db 파일이 없습니다. data/report_reports.db로 업로드하세요."}
+    con=db_connect()
+    today=datetime.now(KST).strftime("%Y-%m-%d")
+    latest=con.execute("SELECT MAX(report_date) FROM reports WHERE report_date<=?", (today,)).fetchone()[0] or ""
+    if not latest:
+        latest=con.execute("SELECT MAX(report_date) FROM reports").fetchone()[0] or ""
+    if not start and not end:
+        start=latest
+        end=latest
+    elif start and not end:
+        end=start
+    elif end and not start:
+        start=end
+    where=[]
+    args=[]
+    if start:
+        where.append("report_date>=?")
+        args.append(start)
+    if end:
+        where.append("report_date<=?")
+        args.append(end)
+    if q:
+        like="%"+q+"%"
+        where.append("""(
+            stock_name LIKE ? OR stock_code LIKE ? OR title LIKE ? OR securities_firm LIKE ?
+            OR summary LIKE ? OR target_price_reason LIKE ?
+            OR EXISTS (SELECT 1 FROM report_keywords rk WHERE rk.report_id=reports.report_id AND rk.keyword LIKE ?)
+            OR EXISTS (SELECT 1 FROM report_reasons rr WHERE rr.report_id=reports.report_id AND (rr.reason_keyword LIKE ? OR rr.reason_text LIKE ?))
+        )""")
+        args.extend([like, like, like, like, like, like, like, like, like])
+    where_sql=(" WHERE "+" AND ".join(where)) if where else ""
+    reports=db_rows(
+        con,
+        f"""
+        SELECT report_id,title,report_date,source,securities_firm,analyst,report_url,stock_name,stock_code,sector,
+               investment_opinion,target_price,previous_target_price,target_price_change_type,
+               current_price_at_report_date,upside_potential,summary,target_price_reason,risk_summary
+        FROM reports
+        {where_sql}
+        ORDER BY report_date DESC, report_id DESC
+        LIMIT ?
+        """,
+        args+[int(limit or 120)],
+    )
+    ids=[r["report_id"] for r in reports]
+    reasons_by={}
+    keywords_by={}
+    if ids:
+        ph=",".join("?" for _ in ids)
+        for row in db_rows(con, f"SELECT report_id,reason_type,reason_keyword,reason_text,sentiment FROM report_reasons WHERE report_id IN ({ph}) ORDER BY reason_id", ids):
+            reasons_by.setdefault(row["report_id"], []).append(row)
+        for row in db_rows(con, f"SELECT report_id,keyword,keyword_type FROM report_keywords WHERE report_id IN ({ph}) ORDER BY keyword_id", ids):
+            keywords_by.setdefault(row["report_id"], []).append(row)
+    for r in reports:
+        r["reasons"]=reasons_by.get(r["report_id"], [])
+        r["keywords"]=keywords_by.get(r["report_id"], [])
+    con.close()
+    return {
+        "ok":True,
+        "reports":reports,
+        "meta":{"start":start, "end":end, "q":q, "latestDate":latest, "count":len(reports)}
+    }
+
+def industry_payload_from_db(month=""):
+    if not report_db_exists():
+        return None
+    con=db_connect()
+    if not month:
+        row=con.execute(
+            """
+            SELECT ir.report_month
+            FROM industry_reports ir
+            WHERE EXISTS (SELECT 1 FROM industry_items ii WHERE ii.industry_report_id=ir.industry_report_id)
+            ORDER BY ir.report_month DESC
+            LIMIT 1
+            """
+        ).fetchone()
+        month=row["report_month"] if row else ""
+    report=con.execute("SELECT * FROM industry_reports WHERE report_month=?", (month,)).fetchone()
+    if not report:
+        con.close()
+        return None
+    all_months=[r["report_month"] for r in db_rows(con, "SELECT report_month FROM industry_reports ORDER BY report_month")]
+    extracted_months=[
+        r["report_month"] for r in db_rows(
+            con,
+            """
+            SELECT DISTINCT ir.report_month
+            FROM industry_reports ir JOIN industry_items ii ON ii.industry_report_id=ir.industry_report_id
+            ORDER BY ir.report_month
+            """
+        )
+    ]
+    latest_items=db_rows(con, "SELECT * FROM industry_items WHERE industry_report_id=? ORDER BY rank", (report["industry_report_id"],))
+    items=[]
+    for item in latest_items:
+        monthly=db_rows(
+            con,
+            """
+            SELECT ir.report_month AS month, ii.latest_amount AS amount, ii.latest_growth AS growth
+            FROM industry_reports ir
+            JOIN industry_items ii ON ii.industry_report_id=ir.industry_report_id
+            WHERE ii.item_name=?
+            ORDER BY ir.report_month
+            """,
+            (item["item_name"],),
+        )
+        by_month={r["month"]:r for r in monthly}
+        themes=[r["keyword"] for r in db_rows(con, "SELECT keyword FROM industry_keywords WHERE industry_report_id=? AND item_key=? AND keyword_type='theme' ORDER BY keyword_id", (report["industry_report_id"], item["item_key"]))]
+        news=[r["keyword"] for r in db_rows(con, "SELECT keyword FROM industry_keywords WHERE industry_report_id=? AND item_key=? AND keyword_type='news' ORDER BY keyword_id", (report["industry_report_id"], item["item_key"]))]
+        items.append({
+            "rank":item["rank"], "key":item["item_key"], "name":item["item_name"],
+            "months":extracted_months,
+            "amounts":[by_month.get(m,{}).get("amount") for m in extracted_months],
+            "monthly":[by_month.get(m,{}).get("growth") for m in extracted_months],
+            "latest":item["latest_growth"], "latestAmount":item["latest_amount"],
+            "avg3":item["avg_3m_growth"], "acceleration":item["acceleration"], "score":item["score"],
+            "themes":themes, "newsKeywords":news, "comment":item["comment"],
+        })
+    countries=[{"name":r["country_name"],"amount":r["export_amount"],"latest":r["growth_rate"],"comment":r["comment"]} for r in db_rows(con, "SELECT * FROM industry_countries WHERE industry_report_id=? ORDER BY growth_rate DESC", (report["industry_report_id"],))]
+    regions=[{"name":r["region_name"],"amount":r["export_amount"],"latest":r["growth_rate"],"comment":r["comment"]} for r in db_rows(con, "SELECT * FROM industry_regions WHERE industry_report_id=? ORDER BY growth_rate DESC", (report["industry_report_id"],))]
+    downloads=db_rows(con, "SELECT report_month,title,source_url,local_file_path,file_size,downloaded_at FROM industry_downloads ORDER BY report_month DESC")
+    con.close()
+    return {
+        "ok":True,
+        "dataVerified":True,
+        "dataScope":report["data_scope"] or "SQLite DB 수출입 분석 데이터",
+        "source":report["source"] or "산업통상자원부",
+        "reportMonth":report["report_month"],
+        "availableMonths":list(reversed(all_months)),
+        "title":report["title"],
+        "url":report["source_url"],
+        "publishedDate":report["published_date"],
+        "generatedAt":report["generated_at"],
+        "statusMessage":"서버 SQLite DB에서 수출입 분석 데이터 로드 완료",
+        "analysisMode":"sqlite_db",
+        "usedSavedData":True,
+        "runDetail":"업로드된 report_reports.db의 industry_* 테이블에서 품목별 수출액, 증감률, 국가/지역 흐름을 읽었습니다.",
+        "headline":report["headline"] or "품목별·월별 흐름을 기준으로 강한 산업을 확인합니다.",
+        "metrics":{
+            "exportAmount":report["export_amount"] or "-",
+            "exportYoY":report["export_yoy"] or "",
+            "importAmount":report["import_amount"] or "-",
+            "importYoY":report["import_yoy"] or "",
+            "balance":report["trade_balance"] or "-",
+            "balanceComment":report["balance_comment"] or "",
+        },
+        "months":extracted_months,
+        "items":items,
+        "countries":countries,
+        "regions":regions,
+        "downloadedReports":downloads,
+    }
 
 def find_free_port():
     for port in range(5000, 5100):
@@ -2206,6 +2518,9 @@ def export_report_snapshot(force=False):
     대신 확인된 표 기반 데이터(confirmed_export_report)를 JSON으로 저장하고 웹페이지에 표시한다.
     최신 게시물 메타 정보는 가능할 때만 갱신하고, 실패해도 데이터 화면은 깨지지 않는다.
     """
+    db_data=industry_payload_from_db("")
+    if db_data:
+        return db_data
     data=load_saved_export_report()
     if not data:
         data=sample_export_report()
@@ -2247,6 +2562,18 @@ class Handler(BaseHTTPRequestHandler):
     def do_GET(self):
         if self.path=="/" or self.path.startswith("/index"):
             self.send_content(200, HTML.replace("__DEFAULT_KEYWORDS__", json.dumps(DEFAULT_KEYWORDS,ensure_ascii=False)))
+        elif self.path.startswith("/api/research-reports"):
+            try:
+                from urllib.parse import urlparse, parse_qs
+                qs=parse_qs(urlparse(self.path).query)
+                start=qs.get("start",[""])[0].strip()
+                end=qs.get("end",[""])[0].strip()
+                q=qs.get("q",[""])[0].strip()
+                limit=int(qs.get("limit",["120"])[0] or 120)
+                self.send_content(200, json.dumps(research_reports_payload(start, end, q, limit), ensure_ascii=False), "application/json; charset=utf-8")
+            except Exception as e:
+                log_error(traceback.format_exc())
+                self.send_content(500, json.dumps({"ok":False,"error":str(e)}, ensure_ascii=False), "application/json; charset=utf-8")
         elif self.path.startswith("/api/export-report"):
             try:
                 from urllib.parse import urlparse, parse_qs
