@@ -1,6 +1,6 @@
 
 # -*- coding: utf-8 -*-
-import json, os, re, socket, sqlite3, threading, time, traceback, webbrowser
+import json, os, re, socket, sqlite3, threading, time, traceback, webbrowser, zipfile
 import xml.etree.ElementTree as ET
 from datetime import datetime, timedelta, timezone
 from email.utils import parsedate_to_datetime
@@ -1278,10 +1278,38 @@ def log_error(msg):
 def report_db_path():
     return os.environ.get("REPORT_DB_PATH") or os.path.join(app_dir(), "data", "report_reports.db")
 
+def report_db_zip_path():
+    return os.environ.get("REPORT_DB_ZIP_PATH") or os.path.join(app_dir(), "data", "report_reports.db.zip")
+
+def ensure_report_db():
+    db_path=report_db_path()
+    if os.path.exists(db_path):
+        return True
+    zip_path=report_db_zip_path()
+    if not os.path.exists(zip_path):
+        return False
+    os.makedirs(os.path.dirname(db_path), exist_ok=True)
+    with zipfile.ZipFile(zip_path) as zf:
+        db_member=None
+        for name in zf.namelist():
+            if name.replace("\\","/").endswith("report_reports.db"):
+                db_member=name
+                break
+        if not db_member:
+            raise RuntimeError("report_reports.db.zip 안에 report_reports.db 파일이 없습니다.")
+        with zf.open(db_member) as src, open(db_path, "wb") as dst:
+            while True:
+                chunk=src.read(1024*1024)
+                if not chunk:
+                    break
+                dst.write(chunk)
+    return os.path.exists(db_path)
+
 def report_db_exists():
-    return os.path.exists(report_db_path())
+    return ensure_report_db()
 
 def db_connect():
+    ensure_report_db()
     con=sqlite3.connect(report_db_path())
     con.row_factory=sqlite3.Row
     return con
