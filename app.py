@@ -1,4 +1,4 @@
-
+﻿
 # -*- coding: utf-8 -*-
 import json, os, re, socket, sqlite3, threading, time, traceback, webbrowser, zipfile
 import xml.etree.ElementTree as ET
@@ -1466,9 +1466,12 @@ def report_db_zip_path():
 
 def ensure_report_db():
     db_path=report_db_path()
-    if os.path.exists(db_path):
-        return True
     zip_path=report_db_zip_path()
+    if os.path.exists(db_path):
+        if not os.path.exists(zip_path):
+            return True
+        if os.path.getmtime(db_path) >= os.path.getmtime(zip_path):
+            return True
     if not os.path.exists(zip_path):
         return False
     os.makedirs(os.path.dirname(db_path), exist_ok=True)
@@ -2886,3 +2889,4 @@ if __name__=="__main__":
     except Exception:
         log_error(traceback.format_exc())
         input("Error. Check error_log.txt. Press Enter.")
+
