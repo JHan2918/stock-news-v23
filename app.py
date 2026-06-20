@@ -981,7 +981,14 @@ async function loadResearchReports(useFilters){
     }
     params.set("ts", Date.now());
     const res=await fetch(`/api/research-reports?${params.toString()}`);
-    const data=await res.json();
+    const raw=await res.text();
+    let data;
+    try{
+      data=JSON.parse(raw);
+    }catch(parseError){
+      const preview=raw.replace(/\\s+/g, " ").slice(0, 120);
+      throw new Error(`API가 JSON이 아닌 응답을 보냈습니다. HTTP ${res.status} / ${preview}`);
+    }
     if(!data.ok){status.innerHTML=`<span class='err'>${escapeHtml(data.error || "보고서 DB 오류")}</span>`; return;}
     LAST_REPORT_DATA=data;
     renderResearchReports(data);
