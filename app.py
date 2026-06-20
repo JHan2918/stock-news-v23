@@ -268,7 +268,7 @@ button{background:var(--blue);color:white;border:0;border-radius:10px;padding:12
 <div class="report-controls">
   <div><div class="meta">시작일</div><input id="reportStart" type="date"></div>
   <div><div class="meta">종료일</div><input id="reportEnd" type="date"></div>
-  <div><div class="meta">종목/키워드</div><input id="reportQuery" type="text" placeholder="삼성전자, HBM, 현대차"></div>
+  <div><div class="meta">종목명/종목코드</div><input id="reportQuery" type="text" placeholder="삼성전자, 005930, 현대차"></div>
   <button onclick="loadResearchReports(true)">조회</button>
   <button onclick="clearReportFilters()" style="background:#555">최근 1일</button>
 </div>
@@ -1529,12 +1529,9 @@ def research_reports_payload(start="", end="", q="", limit=120):
     if q:
         like="%"+q+"%"
         where.append("""(
-            stock_name LIKE ? OR stock_code LIKE ? OR title LIKE ? OR securities_firm LIKE ?
-            OR summary LIKE ? OR target_price_reason LIKE ?
-            OR EXISTS (SELECT 1 FROM report_keywords rk WHERE rk.report_id=reports.report_id AND rk.keyword LIKE ?)
-            OR EXISTS (SELECT 1 FROM report_reasons rr WHERE rr.report_id=reports.report_id AND (rr.reason_keyword LIKE ? OR rr.reason_text LIKE ?))
+            stock_name LIKE ? OR stock_code LIKE ?
         )""")
-        args.extend([like, like, like, like, like, like, like, like, like])
+        args.extend([like, like])
     where_sql=(" WHERE "+" AND ".join(where)) if where else ""
     reports=db_rows(
         con,
