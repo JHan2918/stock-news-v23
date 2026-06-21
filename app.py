@@ -153,6 +153,7 @@ button{background:var(--blue);color:white;border:0;border-radius:10px;padding:12
 .export-stat-controls{display:grid;grid-template-columns:minmax(130px,160px) minmax(130px,160px) minmax(180px,240px) minmax(220px,1fr) auto;gap:10px;align-items:end}.export-stat-controls input,.export-stat-controls select{width:100%;min-width:0}.export-stat-controls button{height:42px;white-space:nowrap;padding:0 14px}.export-stat-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}.export-stat-summary{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px;margin-top:10px}.export-stat-card{background:#202832;border:1px solid #344151;border-radius:12px;padding:10px}.export-stat-card .v{font-size:21px;font-weight:bold;color:#9dccff}.export-stat-card .k{font-size:12px;color:#9fb0bf}@media(max-width:980px){.export-stat-controls{grid-template-columns:1fr 1fr}.export-stat-controls>div:nth-child(4){grid-column:1/-1}.export-stat-controls button{width:100%}.export-stat-grid{grid-template-columns:1fr}}@media(max-width:620px){.export-stat-controls{grid-template-columns:1fr}}
 .report-controls{display:grid;grid-template-columns:minmax(150px,170px) minmax(150px,170px) minmax(260px,1fr) auto auto;gap:10px;align-items:end}.report-controls input{width:100%;min-width:0}.report-controls button{height:42px;white-space:nowrap;padding:0 14px}.report-list{display:grid;grid-template-columns:1fr;gap:10px}.report-card{background:#202832;border:1px solid #344151;border-radius:12px;padding:12px}.report-card h3{margin:0 0 6px;font-size:17px}.report-meta{display:flex;gap:8px;flex-wrap:wrap;color:#9fb0bf;font-size:12px;margin-bottom:8px}.report-chip{display:inline-block;border:1px solid #4f77aa;background:#26384d;color:#d7e7ff;border-radius:999px;padding:2px 7px;margin:2px;font-size:12px}.report-price{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:8px;margin:8px 0}.report-price div{background:#111820;border:1px solid #344151;border-radius:10px;padding:8px}.report-price span{display:block;color:#9fb0bf;font-size:12px}.report-price b{display:block;margin-top:3px;color:#d7e7ff}.report-summary{line-height:1.65;color:#dfe8f2}.report-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}.report-actions a{display:inline-block;background:#2f81f7;color:white;text-decoration:none;border-radius:9px;padding:7px 10px;font-size:13px}.report-actions button{padding:7px 10px;font-size:13px}.report-detail{margin-top:8px;border-top:1px solid #344151;padding-top:8px}.report-detail h4{margin:8px 0 4px}.report-detail ul{margin:6px 0 0 18px;padding:0}.report-detail li{margin:4px 0;line-height:1.55}.report-statbar{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:8px}.report-stat{background:#202832;border:1px solid #344151;border-radius:12px;padding:10px}.report-stat .v{font-size:22px;font-weight:bold;color:#9dccff}.report-stat .k{font-size:12px;color:#9fb0bf}@media(max-width:980px){.report-controls{grid-template-columns:1fr 1fr}.report-controls>div:nth-child(3){grid-column:1/-1}.report-controls button{width:100%}}@media(max-width:620px){.report-controls{grid-template-columns:1fr}}
 .report-chart{margin:10px 0 12px;background:#111820;border:1px solid #344151;border-radius:10px;padding:10px}.report-chart-head{display:flex;justify-content:space-between;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:8px}.report-chart-title{font-weight:700}.report-periods{display:flex;gap:6px;flex-wrap:wrap}.report-periods button{height:30px;padding:0 9px;border-radius:8px;background:#26384d;border:1px solid #4f77aa;font-size:12px}.report-periods button.active{background:#2f81f7;border-color:#7fb4ff}.report-chart canvas{width:100%;height:260px;display:block;background:#0d131a;border:1px solid #263544;border-radius:8px}.report-chart-status{margin-top:7px;color:#9fb0bf;font-size:12px}@media(max-width:620px){.report-chart canvas{height:220px}}
+.stock-suggest-box{position:relative}.stock-suggestions{position:absolute;left:0;right:0;top:64px;z-index:40;background:#0d131a;border:1px solid #3b4a5b;border-radius:8px;max-height:260px;overflow:auto;box-shadow:0 12px 30px rgba(0,0,0,.38)}.stock-suggestion{display:flex;justify-content:space-between;gap:10px;padding:9px 10px;border-bottom:1px solid #243140;cursor:pointer}.stock-suggestion:hover,.stock-suggestion.active{background:#1e3145}.stock-suggestion:last-child{border-bottom:0}.stock-suggestion b{font-size:14px}.stock-suggestion span{color:#9fb0bf;font-size:12px;white-space:nowrap}
 
 </style>
 </head>
@@ -269,7 +270,7 @@ button{background:var(--blue);color:white;border:0;border-radius:10px;padding:12
 <div class="report-controls">
   <div><div class="meta">시작일</div><input id="reportStart" type="date"></div>
   <div><div class="meta">종료일</div><input id="reportEnd" type="date"></div>
-  <div><div class="meta">종목명/종목코드</div><input id="reportQuery" type="text" placeholder="삼성전자, 005930, 현대차"></div>
+  <div class="stock-suggest-box"><div class="meta">종목명/종목코드</div><input id="reportQuery" type="text" placeholder="삼, 삼성, 005930" autocomplete="off"><input id="reportQueryCode" type="hidden"><div id="reportStockSuggestions" class="stock-suggestions hidden"></div></div>
   <button onclick="loadResearchReports(true)">조회</button>
   <button onclick="clearReportFilters()" style="background:#555">최근 1일</button>
 </div>
@@ -399,6 +400,7 @@ function init(){
   document.getElementById("sortBy").addEventListener("change", clearResultsOnly);
   document.querySelectorAll("#keywordGrid input").forEach(x=>x.addEventListener("change", clearResultsOnly));
   document.getElementById("summary").innerHTML="<span class='ok'>준비 완료. 조건을 입력하고 검색하세요.</span>";
+  initReportStockSuggest();
   loadMarketCharts();
   loadDictionary();
   loadBreakingTopics();
@@ -940,6 +942,9 @@ function drawMiniChart(series){
 let LAST_EXPORT_DATA=null;
 let SELECTED_EXPORT_ITEM=null;
 let LAST_REPORT_DATA=null;
+let REPORT_STOCK_SUGGESTIONS=[];
+let REPORT_STOCK_ACTIVE=-1;
+let REPORT_STOCK_TIMER=null;
 
 function moneyText(v){
   if(v===null || v===undefined || v==="") return "-";
@@ -955,13 +960,114 @@ function pctText(v){
   return (n>0?"+":"")+n.toFixed(1)+"%";
 }
 
+function initReportStockSuggest(){
+  const input=document.getElementById("reportQuery");
+  const box=document.getElementById("reportStockSuggestions");
+  if(!input || !box || input.dataset.suggestBound==="1") return;
+  input.dataset.suggestBound="1";
+  input.addEventListener("input", ()=>{
+    const code=document.getElementById("reportQueryCode");
+    if(code) code.value="";
+    clearTimeout(REPORT_STOCK_TIMER);
+    REPORT_STOCK_TIMER=setTimeout(fetchReportStockSuggestions, 140);
+  });
+  input.addEventListener("keydown", e=>{
+    if(box.classList.contains("hidden")) return;
+    if(e.key==="ArrowDown"){
+      e.preventDefault();
+      REPORT_STOCK_ACTIVE=Math.min(REPORT_STOCK_SUGGESTIONS.length-1, REPORT_STOCK_ACTIVE+1);
+      markReportStockSuggestion();
+    }else if(e.key==="ArrowUp"){
+      e.preventDefault();
+      REPORT_STOCK_ACTIVE=Math.max(0, REPORT_STOCK_ACTIVE-1);
+      markReportStockSuggestion();
+    }else if(e.key==="Enter" && REPORT_STOCK_ACTIVE>=0){
+      e.preventDefault();
+      selectReportStock(REPORT_STOCK_SUGGESTIONS[REPORT_STOCK_ACTIVE]);
+    }else if(e.key==="Escape"){
+      hideReportStockSuggestions();
+    }
+  });
+  document.addEventListener("click", e=>{
+    if(!e.target.closest(".stock-suggest-box")) hideReportStockSuggestions();
+  });
+}
+
+function hideReportStockSuggestions(){
+  const box=document.getElementById("reportStockSuggestions");
+  if(!box) return;
+  box.classList.add("hidden");
+  box.innerHTML="";
+  REPORT_STOCK_ACTIVE=-1;
+}
+
+function markReportStockSuggestion(){
+  const box=document.getElementById("reportStockSuggestions");
+  if(!box) return;
+  box.querySelectorAll(".stock-suggestion").forEach((el,idx)=>{
+    el.classList.toggle("active", idx===REPORT_STOCK_ACTIVE);
+  });
+}
+
+function selectReportStock(item){
+  const input=document.getElementById("reportQuery");
+  const code=document.getElementById("reportQueryCode");
+  if(input) input.value=`${item.name} (${item.code})`;
+  if(code) code.value=item.code || "";
+  hideReportStockSuggestions();
+}
+
+function renderReportStockSuggestions(items){
+  const box=document.getElementById("reportStockSuggestions");
+  if(!box) return;
+  REPORT_STOCK_SUGGESTIONS=items || [];
+  REPORT_STOCK_ACTIVE=-1;
+  if(!REPORT_STOCK_SUGGESTIONS.length){
+    hideReportStockSuggestions();
+    return;
+  }
+  box.innerHTML=REPORT_STOCK_SUGGESTIONS.map((item,idx)=>`
+    <div class="stock-suggestion" data-idx="${idx}">
+      <b>${escapeHtml(item.name || "")}</b>
+      <span>${escapeHtml(item.code || "")}${item.market ? " / "+escapeHtml(item.market) : ""}</span>
+    </div>`).join("");
+  box.querySelectorAll(".stock-suggestion").forEach(el=>{
+    el.addEventListener("mousedown", e=>{
+      e.preventDefault();
+      selectReportStock(REPORT_STOCK_SUGGESTIONS[Number(el.dataset.idx)]);
+    });
+  });
+  box.classList.remove("hidden");
+}
+
+async function fetchReportStockSuggestions(){
+  const input=document.getElementById("reportQuery");
+  if(!input) return;
+  const q=input.value.trim();
+  if(!q){
+    hideReportStockSuggestions();
+    return;
+  }
+  try{
+    const res=await fetch(`/api/stocks?q=${encodeURIComponent(q)}&ts=${Date.now()}`);
+    const data=await res.json();
+    if(!data.ok) throw new Error(data.error || "종목 검색 실패");
+    renderReportStockSuggestions((data.stocks || []).slice(0,10));
+  }catch(e){
+    hideReportStockSuggestions();
+  }
+}
+
 function clearReportFilters(){
   const s=document.getElementById("reportStart");
   const e=document.getElementById("reportEnd");
   const q=document.getElementById("reportQuery");
+  const c=document.getElementById("reportQueryCode");
   if(s) s.value="";
   if(e) e.value="";
   if(q) q.value="";
+  if(c) c.value="";
+  hideReportStockSuggestions();
   loadResearchReports(false);
 }
 
@@ -975,7 +1081,8 @@ async function loadResearchReports(useFilters){
     if(useFilters){
       const s=document.getElementById("reportStart").value.trim();
       const e=document.getElementById("reportEnd").value.trim();
-      const q=document.getElementById("reportQuery").value.trim();
+      const selectedCode=(document.getElementById("reportQueryCode")||{}).value || "";
+      const q=selectedCode || document.getElementById("reportQuery").value.trim();
       if(s) params.set("start", s);
       if(e) params.set("end", e);
       if(q) params.set("q", q);
@@ -1660,6 +1767,98 @@ def db_connect():
 
 def db_rows(con, sql, args=()):
     return [dict(r) for r in con.execute(sql, args).fetchall()]
+
+STOCK_MASTER_CACHE={"loaded_at":0, "items":[]}
+DEFAULT_STOCK_MASTER=[
+    {"code":"005930","name":"삼성전자","market":"KOSPI","marcap":0,"source":"default"},
+    {"code":"000660","name":"SK하이닉스","market":"KOSPI","marcap":0,"source":"default"},
+    {"code":"005380","name":"현대차","market":"KOSPI","marcap":0,"source":"default"},
+    {"code":"000270","name":"기아","market":"KOSPI","marcap":0,"source":"default"},
+    {"code":"035420","name":"NAVER","market":"KOSPI","marcap":0,"source":"default"},
+    {"code":"035720","name":"카카오","market":"KOSPI","marcap":0,"source":"default"},
+    {"code":"204320","name":"HL만도","market":"KOSPI","marcap":0,"source":"default"},
+    {"code":"034020","name":"두산에너빌리티","market":"KOSPI","marcap":0,"source":"default"},
+]
+
+def normalize_stock_name(value):
+    return re.sub(r"[\s\-_()./&]+", "", str(value or "").strip().lower())
+
+def stock_master_items():
+    now=time.time()
+    if STOCK_MASTER_CACHE["items"] and now-STOCK_MASTER_CACHE["loaded_at"]<3600*12:
+        return STOCK_MASTER_CACHE["items"]
+    items=[]
+    try:
+        import FinanceDataReader as fdr
+        df=fdr.StockListing("KRX")
+        for _,row in df.iterrows():
+            code=normalize_stock_code(row.get("Code"))
+            name=str(row.get("Name") or "").strip()
+            if not code or not name:
+                continue
+            items.append({
+                "code":code,
+                "name":name,
+                "market":str(row.get("Market") or row.get("MarketId") or "").strip(),
+                "marcap":int(row.get("Marcap") or 0),
+                "source":"FDR_KRX",
+            })
+    except Exception:
+        items=[]
+    if not items:
+        try:
+            if report_db_exists():
+                con=db_connect()
+                rows=db_rows(
+                    con,
+                    """
+                    SELECT stock_name,stock_code,count(*) AS cnt
+                    FROM reports
+                    WHERE stock_name IS NOT NULL AND trim(stock_name)!=''
+                      AND stock_code IS NOT NULL AND trim(stock_code)!=''
+                    GROUP BY stock_name,stock_code
+                    """,
+                )
+                con.close()
+                for r in rows:
+                    code=normalize_stock_code(r.get("stock_code"))
+                    name=str(r.get("stock_name") or "").strip()
+                    if code and name:
+                        items.append({"code":code, "name":name, "market":"", "marcap":0, "count":int(r.get("cnt") or 0), "source":"report_db"})
+        except Exception:
+            log_error("stock master fallback failed\n"+traceback.format_exc())
+    if not items:
+        items=DEFAULT_STOCK_MASTER[:]
+    STOCK_MASTER_CACHE["items"]=items
+    STOCK_MASTER_CACHE["loaded_at"]=now
+    return items
+
+def stock_suggestions_payload(q="", limit=10):
+    nq=normalize_stock_name(q)
+    if not nq:
+        return {"ok":True, "count":0, "stocks":[]}
+    exact=[]
+    partial=[]
+    for item in stock_master_items():
+        code=item.get("code") or ""
+        name=item.get("name") or ""
+        nn=normalize_stock_name(name)
+        if nq==code or nq==nn:
+            exact.append(item)
+        elif nq in nn or nn in nq:
+            partial.append(item)
+    def score(item):
+        code=item.get("code") or ""
+        nn=normalize_stock_name(item.get("name"))
+        if nq==code:
+            return 0
+        if nq==nn:
+            return 1
+        if nn.startswith(nq):
+            return 2
+        return 3
+    matches=sorted(exact or partial, key=lambda it:(score(it), -int(it.get("count") or 0), -int(it.get("marcap") or 0), it.get("name") or ""))[:int(limit or 10)]
+    return {"ok":True, "count":len(matches), "stocks":matches}
 
 def research_reports_payload(start="", end="", q="", limit=120):
     if not report_db_exists():
@@ -3098,6 +3297,16 @@ class Handler(BaseHTTPRequestHandler):
                 report_id=qs.get("report_id",[""])[0].strip()
                 period=qs.get("period",["6m"])[0].strip()
                 self.send_content(200, json.dumps(report_price_chart_payload(stock_code, report_date, period, report_id), ensure_ascii=False), "application/json; charset=utf-8")
+            except Exception as e:
+                log_error(traceback.format_exc())
+                self.send_content(500, json.dumps({"ok":False,"error":str(e)}, ensure_ascii=False), "application/json; charset=utf-8")
+        elif self.path.startswith("/api/stocks"):
+            try:
+                from urllib.parse import urlparse, parse_qs
+                qs=parse_qs(urlparse(self.path).query)
+                q=qs.get("q",[""])[0].strip()
+                limit=int(qs.get("limit",["10"])[0] or 10)
+                self.send_content(200, json.dumps(stock_suggestions_payload(q, limit), ensure_ascii=False), "application/json; charset=utf-8")
             except Exception as e:
                 log_error(traceback.format_exc())
                 self.send_content(500, json.dumps({"ok":False,"error":str(e)}, ensure_ascii=False), "application/json; charset=utf-8")
