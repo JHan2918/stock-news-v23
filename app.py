@@ -945,6 +945,22 @@ let LAST_REPORT_DATA=null;
 let REPORT_STOCK_SUGGESTIONS=[];
 let REPORT_STOCK_ACTIVE=-1;
 let REPORT_STOCK_TIMER=null;
+const REPORT_STOCK_FALLBACK=[
+  {code:"005930",name:"삼성전자",market:"KOSPI"},
+  {code:"005935",name:"삼성전자우",market:"KOSPI"},
+  {code:"009150",name:"삼성전기",market:"KOSPI"},
+  {code:"032830",name:"삼성생명",market:"KOSPI"},
+  {code:"028260",name:"삼성물산",market:"KOSPI"},
+  {code:"006400",name:"삼성SDI",market:"KOSPI"},
+  {code:"207940",name:"삼성바이오로직스",market:"KOSPI"},
+  {code:"000660",name:"SK하이닉스",market:"KOSPI"},
+  {code:"005380",name:"현대차",market:"KOSPI"},
+  {code:"000270",name:"기아",market:"KOSPI"},
+  {code:"204320",name:"HL만도",market:"KOSPI"},
+  {code:"034020",name:"두산에너빌리티",market:"KOSPI"},
+  {code:"035420",name:"NAVER",market:"KOSPI"},
+  {code:"035720",name:"카카오",market:"KOSPI"}
+];
 
 function moneyText(v){
   if(v===null || v===undefined || v==="") return "-";
@@ -968,6 +984,10 @@ function initReportStockSuggest(){
   input.addEventListener("input", ()=>{
     const code=document.getElementById("reportQueryCode");
     if(code) code.value="";
+    const q=input.value.trim();
+    const local=localReportStockSuggestions(q);
+    if(local.length) renderReportStockSuggestions(local);
+    else hideReportStockSuggestions();
     clearTimeout(REPORT_STOCK_TIMER);
     REPORT_STOCK_TIMER=setTimeout(fetchReportStockSuggestions, 140);
   });
@@ -1040,6 +1060,16 @@ function renderReportStockSuggestions(items){
   box.classList.remove("hidden");
 }
 
+function localReportStockSuggestions(q){
+  const nq=String(q || "").trim().toLowerCase().replace(/[\\s_()./&-]+/g,"");
+  if(!nq) return [];
+  return REPORT_STOCK_FALLBACK.filter(item=>{
+    const name=String(item.name || "").toLowerCase().replace(/[\\s_()./&-]+/g,"");
+    const code=String(item.code || "");
+    return name.includes(nq) || code.includes(nq);
+  }).slice(0,10);
+}
+
 async function fetchReportStockSuggestions(){
   const input=document.getElementById("reportQuery");
   if(!input) return;
@@ -1048,13 +1078,17 @@ async function fetchReportStockSuggestions(){
     hideReportStockSuggestions();
     return;
   }
+  const local=localReportStockSuggestions(q);
+  if(local.length) renderReportStockSuggestions(local);
   try{
     const res=await fetch(`/api/stocks?q=${encodeURIComponent(q)}&ts=${Date.now()}`);
     const data=await res.json();
     if(!data.ok) throw new Error(data.error || "종목 검색 실패");
-    renderReportStockSuggestions((data.stocks || []).slice(0,10));
+    const stocks=(data.stocks || []).slice(0,10);
+    if(stocks.length) renderReportStockSuggestions(stocks);
+    else if(!local.length) hideReportStockSuggestions();
   }catch(e){
-    hideReportStockSuggestions();
+    if(!local.length) hideReportStockSuggestions();
   }
 }
 
