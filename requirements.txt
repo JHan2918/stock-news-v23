@@ -1,2 +1,3 @@
 # Optional: kiwipiepy enables better Korean keyword extraction if installed.
 # kiwipiepy
+finance-datareader

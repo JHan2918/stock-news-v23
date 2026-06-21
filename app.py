@@ -152,6 +152,7 @@ button{background:var(--blue);color:white;border:0;border-radius:10px;padding:12
 .export-table{width:100%;border-collapse:collapse;font-size:13px}.export-table th,.export-table td{border-bottom:1px solid #344151;padding:7px;text-align:right}.export-table th:first-child,.export-table td:first-child{text-align:left}.export-table th{color:#9fb0bf;font-weight:normal}.export-rank{display:block;margin-top:0}.export-rank-card{background:#202832;border:1px solid #344151;border-radius:12px;padding:12px}.scorebar{height:8px;background:#344151;border-radius:999px;overflow:hidden;margin-top:8px}.scorebar>span{display:block;height:100%;background:#7db1ff}.pill{display:inline-block;border:1px solid #4f77aa;border-radius:999px;padding:3px 8px;margin:2px;color:#d7e7ff;background:#26384d;font-size:12px}.emptybox{border:1px dashed #3d4a58;border-radius:12px;padding:16px;color:#9fb0bf;background:#121920;line-height:1.7}.trend-up{color:#8aff8a}.trend-down{color:#ff8585}.trend-flat{color:#aaa}@media(max-width:1100px){.export-row3,.export-row2,.export-analysis-grid{grid-template-columns:1fr}.export-svg{height:260px}}
 .export-stat-controls{display:grid;grid-template-columns:minmax(130px,160px) minmax(130px,160px) minmax(180px,240px) minmax(220px,1fr) auto;gap:10px;align-items:end}.export-stat-controls input,.export-stat-controls select{width:100%;min-width:0}.export-stat-controls button{height:42px;white-space:nowrap;padding:0 14px}.export-stat-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}.export-stat-summary{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px;margin-top:10px}.export-stat-card{background:#202832;border:1px solid #344151;border-radius:12px;padding:10px}.export-stat-card .v{font-size:21px;font-weight:bold;color:#9dccff}.export-stat-card .k{font-size:12px;color:#9fb0bf}@media(max-width:980px){.export-stat-controls{grid-template-columns:1fr 1fr}.export-stat-controls>div:nth-child(4){grid-column:1/-1}.export-stat-controls button{width:100%}.export-stat-grid{grid-template-columns:1fr}}@media(max-width:620px){.export-stat-controls{grid-template-columns:1fr}}
 .report-controls{display:grid;grid-template-columns:minmax(150px,170px) minmax(150px,170px) minmax(260px,1fr) auto auto;gap:10px;align-items:end}.report-controls input{width:100%;min-width:0}.report-controls button{height:42px;white-space:nowrap;padding:0 14px}.report-list{display:grid;grid-template-columns:1fr;gap:10px}.report-card{background:#202832;border:1px solid #344151;border-radius:12px;padding:12px}.report-card h3{margin:0 0 6px;font-size:17px}.report-meta{display:flex;gap:8px;flex-wrap:wrap;color:#9fb0bf;font-size:12px;margin-bottom:8px}.report-chip{display:inline-block;border:1px solid #4f77aa;background:#26384d;color:#d7e7ff;border-radius:999px;padding:2px 7px;margin:2px;font-size:12px}.report-price{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:8px;margin:8px 0}.report-price div{background:#111820;border:1px solid #344151;border-radius:10px;padding:8px}.report-price span{display:block;color:#9fb0bf;font-size:12px}.report-price b{display:block;margin-top:3px;color:#d7e7ff}.report-summary{line-height:1.65;color:#dfe8f2}.report-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}.report-actions a{display:inline-block;background:#2f81f7;color:white;text-decoration:none;border-radius:9px;padding:7px 10px;font-size:13px}.report-actions button{padding:7px 10px;font-size:13px}.report-detail{margin-top:8px;border-top:1px solid #344151;padding-top:8px}.report-detail h4{margin:8px 0 4px}.report-detail ul{margin:6px 0 0 18px;padding:0}.report-detail li{margin:4px 0;line-height:1.55}.report-statbar{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:8px}.report-stat{background:#202832;border:1px solid #344151;border-radius:12px;padding:10px}.report-stat .v{font-size:22px;font-weight:bold;color:#9dccff}.report-stat .k{font-size:12px;color:#9fb0bf}@media(max-width:980px){.report-controls{grid-template-columns:1fr 1fr}.report-controls>div:nth-child(3){grid-column:1/-1}.report-controls button{width:100%}}@media(max-width:620px){.report-controls{grid-template-columns:1fr}}
+.report-chart{margin:10px 0 12px;background:#111820;border:1px solid #344151;border-radius:10px;padding:10px}.report-chart-head{display:flex;justify-content:space-between;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:8px}.report-chart-title{font-weight:700}.report-periods{display:flex;gap:6px;flex-wrap:wrap}.report-periods button{height:30px;padding:0 9px;border-radius:8px;background:#26384d;border:1px solid #4f77aa;font-size:12px}.report-periods button.active{background:#2f81f7;border-color:#7fb4ff}.report-chart canvas{width:100%;height:260px;display:block;background:#0d131a;border:1px solid #263544;border-radius:8px}.report-chart-status{margin-top:7px;color:#9fb0bf;font-size:12px}@media(max-width:620px){.report-chart canvas{height:220px}}
 
 </style>
 </head>
@@ -1025,6 +1026,9 @@ function renderResearchReportCard(r){
   const reasons=(r.reasons || []).slice(0,5).map(x=>`<li><b>${escapeHtml(x.reason_keyword || x.reason_type || "근거")}</b> ${escapeHtml(x.reason_text || "")}</li>`).join("");
   const sourceUrl=r.report_url || "";
   const detailId=`report-detail-${r.report_id}`;
+  const chartId=`report-chart-${r.report_id}`;
+  const canvasId=`report-chart-canvas-${r.report_id}`;
+  const statusId=`report-chart-status-${r.report_id}`;
   return `
     <div class='report-card'>
       <h3>${escapeHtml(r.stock_name || "-")} <span class='meta'>${escapeHtml(r.stock_code || "")}</span></h3>
@@ -1047,7 +1051,21 @@ function renderResearchReportCard(r){
         <button onclick='toggleReportDetail("${detailId}")' style='background:#555'>상세 보기</button>
         <button onclick='searchExportKeyword("${escapeHtml(r.stock_name || "")}")' style='background:#246b45'>뉴스검색</button>
       </div>
-      <div id='${detailId}' class='report-detail hidden'>
+      <div id='${detailId}' class='report-detail hidden' data-loaded='0' data-stock-code='${escapeHtml(r.stock_code || "")}' data-stock-name='${escapeHtml(r.stock_name || "")}' data-report-date='${escapeHtml(r.report_date || "")}' data-report-id='${escapeHtml(r.report_id || "")}'>
+        <div id='${chartId}' class='report-chart'>
+          <div class='report-chart-head'>
+            <div class='report-chart-title'>종가 vs 목표가 추이</div>
+            <div class='report-periods'>
+              <button data-period='1m' onclick='loadReportPriceChart("${detailId}","1m",this)'>1개월</button>
+              <button data-period='3m' onclick='loadReportPriceChart("${detailId}","3m",this)'>3개월</button>
+              <button data-period='6m' class='active' onclick='loadReportPriceChart("${detailId}","6m",this)'>6개월</button>
+              <button data-period='1y' onclick='loadReportPriceChart("${detailId}","1y",this)'>1년</button>
+              <button data-period='after' onclick='loadReportPriceChart("${detailId}","after",this)'>보고서일 이후</button>
+            </div>
+          </div>
+          <canvas id='${canvasId}'></canvas>
+          <div id='${statusId}' class='report-chart-status'>상세 보기를 열면 주가와 목표가를 함께 불러옵니다.</div>
+        </div>
         <h4>목표가 이유</h4>
         <div class='meta'>${escapeHtml(r.target_price_reason || "-")}</div>
         <h4>리스크</h4>
@@ -1060,7 +1078,140 @@ function renderResearchReportCard(r){
 
 function toggleReportDetail(id){
   const el=document.getElementById(id);
-  if(el) el.classList.toggle("hidden");
+  if(!el) return;
+  el.classList.toggle("hidden");
+  if(!el.classList.contains("hidden") && el.dataset.loaded!=="1"){
+    el.dataset.loaded="1";
+    loadReportPriceChart(id, "6m");
+  }
+}
+
+async function loadReportPriceChart(detailId, period, btn){
+  const el=document.getElementById(detailId);
+  if(!el) return;
+  const canvas=el.querySelector("canvas");
+  const status=el.querySelector(".report-chart-status");
+  const code=el.dataset.stockCode || "";
+  const reportDate=el.dataset.reportDate || "";
+  if(btn){
+    el.querySelectorAll(".report-periods button").forEach(b=>b.classList.remove("active"));
+    btn.classList.add("active");
+  }
+  if(!code){
+    if(status) status.innerHTML="<span class='err'>종목코드가 없어 주가 그래프를 불러올 수 없습니다.</span>";
+    return;
+  }
+  if(status) status.textContent="주가와 목표가 데이터를 불러오는 중...";
+  try{
+    const params=new URLSearchParams({stock_code:code, report_date:reportDate, report_id:el.dataset.reportId || "", period:period || "6m"});
+    const res=await fetch(`/api/report-price-chart?${params.toString()}&ts=${Date.now()}`);
+    const data=await res.json();
+    if(!data.ok) throw new Error(data.error || "주가 그래프 조회 실패");
+    drawReportPriceChart(canvas, data);
+    const targetText=data.targetSeries.length ? `목표가 ${data.targetSeries.length}건` : "목표가 없음";
+    if(status) status.innerHTML=`<span class='ok'>${escapeHtml(data.stockName || code)}</span> / 종가 ${data.closeSeries.length}일 / ${targetText} / ${escapeHtml(data.start)} ~ ${escapeHtml(data.end)}`;
+  }catch(e){
+    if(status) status.innerHTML=`<span class='err'>주가 그래프 오류: ${escapeHtml(e.message)}</span>`;
+  }
+}
+
+function drawReportPriceChart(canvas, data){
+  if(!canvas) return;
+  const rect=canvas.getBoundingClientRect();
+  const dpr=window.devicePixelRatio || 1;
+  const w=Math.max(1, rect.width);
+  const h=Math.max(1, rect.height);
+  canvas.width=Math.floor(w*dpr);
+  canvas.height=Math.floor(h*dpr);
+  const ctx=canvas.getContext("2d");
+  ctx.setTransform(dpr,0,0,dpr,0,0);
+  ctx.clearRect(0,0,w,h);
+  ctx.fillStyle="#0d131a";
+  ctx.fillRect(0,0,w,h);
+  const closes=data.closeSeries || [];
+  const targets=data.targetSeries || [];
+  if(!closes.length){
+    ctx.fillStyle="#9fb0bf";
+    ctx.font="13px Segoe UI";
+    ctx.fillText("주가 데이터가 없습니다.", 18, 28);
+    return;
+  }
+  const pad={l:54,r:76,t:24,b:46};
+  const plotW=w-pad.l-pad.r;
+  const plotH=h-pad.t-pad.b;
+  const startDate=new Date(data.start);
+  const endDate=new Date(data.end);
+  const totalMs=Math.max(1, endDate-startDate);
+  const xOf=dateText=>pad.l+(new Date(dateText)-startDate)/totalMs*plotW;
+  const values=closes.map(x=>Number(x.close)).filter(Number.isFinite).concat(targets.map(x=>Number(x.targetPrice)).filter(Number.isFinite));
+  const min=Math.min(...values);
+  const max=Math.max(...values);
+  const range=Math.max(1, max-min);
+  const yOf=v=>pad.t+(max-Number(v))/range*plotH;
+
+  ctx.strokeStyle="#263544";
+  ctx.fillStyle="#9fb0bf";
+  ctx.font="12px Segoe UI";
+  ctx.textAlign="right";
+  for(let i=0;i<=4;i++){
+    const y=pad.t+plotH*i/4;
+    const val=max-range*i/4;
+    ctx.beginPath(); ctx.moveTo(pad.l,y); ctx.lineTo(w-pad.r,y); ctx.stroke();
+    ctx.fillText(Math.round(val).toLocaleString("ko-KR"), w-8, y+4);
+  }
+  ctx.textAlign="left";
+
+  if(data.reportDate){
+    const rx=xOf(data.reportDate);
+    if(rx>=pad.l && rx<=w-pad.r){
+      ctx.strokeStyle="#f5c542";
+      ctx.setLineDash([4,4]);
+      ctx.beginPath(); ctx.moveTo(rx,pad.t); ctx.lineTo(rx,pad.t+plotH); ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.fillStyle="#f5c542";
+      ctx.fillText("보고서", rx+4, pad.t+13);
+    }
+  }
+
+  ctx.strokeStyle="#7db1ff";
+  ctx.lineWidth=2;
+  ctx.beginPath();
+  closes.forEach((p,i)=>{
+    const x=xOf(p.date), y=yOf(p.close);
+    if(i===0) ctx.moveTo(x,y); else ctx.lineTo(x,y);
+  });
+  ctx.stroke();
+
+  if(targets.length>=2){
+    ctx.strokeStyle="#ff8a80";
+    ctx.lineWidth=1.8;
+    ctx.beginPath();
+    targets.forEach((p,i)=>{
+      const x=xOf(p.date), y=yOf(p.targetPrice);
+      if(i===0) ctx.moveTo(x,y); else ctx.lineTo(x,y);
+    });
+    ctx.stroke();
+  }
+  targets.forEach(p=>{
+    const x=xOf(p.date), y=yOf(p.targetPrice);
+    if(x<pad.l || x>w-pad.r) return;
+    ctx.fillStyle="#ff8a80";
+    ctx.beginPath(); ctx.arc(x,y,4,0,Math.PI*2); ctx.fill();
+  });
+
+  const latest=closes[closes.length-1];
+  ctx.fillStyle="#7db1ff";
+  ctx.font="12px Segoe UI";
+  ctx.fillText("종가", pad.l, 16);
+  if(targets.length){
+    ctx.fillStyle="#ff8a80";
+    ctx.fillText("목표가", pad.l+48, 16);
+  }
+  ctx.fillStyle="#9fb0bf";
+  ctx.fillText(closes[0].date, pad.l, h-16);
+  ctx.textAlign="right";
+  ctx.fillText(latest.date, w-pad.r, h-16);
+  ctx.textAlign="left";
 }
 
 async function loadExportDashboard(force){
@@ -1570,6 +1721,152 @@ def research_reports_payload(start="", end="", q="", limit=120):
         "ok":True,
         "reports":reports,
         "meta":{"start":start, "end":end, "q":q, "latestDate":latest, "count":len(reports)}
+    }
+
+def normalize_stock_code(code):
+    digits=re.sub(r"\D","",str(code or ""))
+    return digits.zfill(6) if digits else ""
+
+def iso_date(value):
+    text=str(value or "").strip()[:10]
+    try:
+        return datetime.strptime(text, "%Y-%m-%d").date()
+    except Exception:
+        return None
+
+def source_report_date(report_date="", report_url="", local_file_path=""):
+    for value in (report_url, local_file_path):
+        text=str(value or "")
+        m=re.search(r"(20\d{2})[-_]?([01]\d)[-_]?([0-3]\d)", text)
+        if m:
+            try:
+                return datetime(int(m.group(1)), int(m.group(2)), int(m.group(3))).date()
+            except Exception:
+                pass
+    return iso_date(report_date)
+
+def chart_date_range(report_date="", period="6m"):
+    today=datetime.now(KST).date()
+    rd=iso_date(report_date) or today
+    if rd>today:
+        rd=today
+    period=(period or "6m").lower()
+    if period=="after":
+        start=rd
+    else:
+        days={"1m":31, "3m":93, "6m":186, "1y":370}.get(period, 186)
+        start=today-timedelta(days=days)
+    return start.strftime("%Y-%m-%d"), today.strftime("%Y-%m-%d")
+
+def stock_close_series(stock_code, start, end):
+    code=normalize_stock_code(stock_code)
+    if not code:
+        raise ValueError("종목코드가 없습니다.")
+    try:
+        import FinanceDataReader as fdr
+    except Exception as exc:
+        raise RuntimeError("FinanceDataReader가 설치되어 있지 않아 주가 데이터를 불러올 수 없습니다.") from exc
+    df=fdr.DataReader(code, start, end)
+    rows=[]
+    for idx,row in df.iterrows():
+        rows.append({
+            "date":idx.strftime("%Y-%m-%d"),
+            "open":int(row.get("Open",0) or 0),
+            "high":int(row.get("High",0) or 0),
+            "low":int(row.get("Low",0) or 0),
+            "close":int(row.get("Close",0) or 0),
+            "volume":int(row.get("Volume",0) or 0),
+        })
+    return rows
+
+def target_price_series(stock_code, start, end):
+    code=normalize_stock_code(stock_code)
+    if not report_db_exists() or not code:
+        return []
+    start_d=iso_date(start)
+    end_d=iso_date(end)
+    con=db_connect()
+    rows=db_rows(
+        con,
+        """
+        SELECT report_id,report_date,report_url,local_file_path,stock_name,stock_code,securities_firm,title,target_price,current_price_at_report_date
+        FROM reports
+        WHERE stock_code=?
+          AND target_price IS NOT NULL
+          AND trim(cast(target_price as text))!=''
+        ORDER BY report_date, report_id
+        """,
+        (code,),
+    )
+    con.close()
+    out=[]
+    for r in rows:
+        d=source_report_date(r.get("report_date"), r.get("report_url"), r.get("local_file_path"))
+        if not d or (start_d and d<start_d) or (end_d and d>end_d):
+            continue
+        try:
+            target=int(float(str(r.get("target_price")).replace(",","")))
+        except Exception:
+            continue
+        if target<=0:
+            continue
+        out.append({
+            "date":d.strftime("%Y-%m-%d"),
+            "targetPrice":target,
+            "currentPrice":r.get("current_price_at_report_date"),
+            "firm":r.get("securities_firm") or "",
+            "title":r.get("title") or "",
+            "reportId":r.get("report_id"),
+        })
+    return out
+
+def report_context_from_id(report_id):
+    if not report_id or not report_db_exists():
+        return {}
+    try:
+        rid=int(report_id)
+    except Exception:
+        return {}
+    con=db_connect()
+    row=con.execute(
+        "SELECT report_id,report_date,report_url,local_file_path,stock_name,stock_code FROM reports WHERE report_id=?",
+        (rid,),
+    ).fetchone()
+    con.close()
+    if not row:
+        return {}
+    d=source_report_date(row["report_date"], row["report_url"], row["local_file_path"])
+    return {
+        "reportDate":d.strftime("%Y-%m-%d") if d else (row["report_date"] or ""),
+        "stockCode":row["stock_code"] or "",
+        "stockName":row["stock_name"] or "",
+    }
+
+def report_price_chart_payload(stock_code="", report_date="", period="6m", report_id=""):
+    ctx=report_context_from_id(report_id)
+    code=normalize_stock_code(ctx.get("stockCode") or stock_code)
+    report_date=ctx.get("reportDate") or report_date
+    start,end=chart_date_range(report_date, period)
+    close_rows=stock_close_series(code, start, end)
+    targets=target_price_series(code, start, end)
+    stock_name=ctx.get("stockName") or ""
+    if report_db_exists():
+        con=db_connect()
+        row=con.execute("SELECT stock_name FROM reports WHERE stock_code=? AND stock_name IS NOT NULL AND trim(stock_name)!='' ORDER BY report_date DESC LIMIT 1", (code,)).fetchone()
+        stock_name=row["stock_name"] if row else ""
+        con.close()
+    return {
+        "ok":True,
+        "stockCode":code,
+        "stockName":stock_name,
+        "reportDate":(iso_date(report_date).strftime("%Y-%m-%d") if iso_date(report_date) else ""),
+        "period":period,
+        "start":start,
+        "end":end,
+        "closeSeries":[{"date":r["date"], "close":r["close"]} for r in close_rows],
+        "ohlcv":close_rows,
+        "targetSeries":targets,
+        "provider":"FinanceDataReader",
     }
 
 def industry_payload_from_db(month=""):
@@ -2789,6 +3086,18 @@ class Handler(BaseHTTPRequestHandler):
                 q=qs.get("q",[""])[0].strip()
                 limit=int(qs.get("limit",["120"])[0] or 120)
                 self.send_content(200, json.dumps(research_reports_payload(start, end, q, limit), ensure_ascii=False), "application/json; charset=utf-8")
+            except Exception as e:
+                log_error(traceback.format_exc())
+                self.send_content(500, json.dumps({"ok":False,"error":str(e)}, ensure_ascii=False), "application/json; charset=utf-8")
+        elif self.path.startswith("/api/report-price-chart"):
+            try:
+                from urllib.parse import urlparse, parse_qs
+                qs=parse_qs(urlparse(self.path).query)
+                stock_code=qs.get("stock_code",[""])[0].strip()
+                report_date=qs.get("report_date",[""])[0].strip()
+                report_id=qs.get("report_id",[""])[0].strip()
+                period=qs.get("period",["6m"])[0].strip()
+                self.send_content(200, json.dumps(report_price_chart_payload(stock_code, report_date, period, report_id), ensure_ascii=False), "application/json; charset=utf-8")
             except Exception as e:
                 log_error(traceback.format_exc())
                 self.send_content(500, json.dumps({"ok":False,"error":str(e)}, ensure_ascii=False), "application/json; charset=utf-8")
