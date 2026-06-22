@@ -1526,6 +1526,7 @@ function renderResearchReportCard(r){
   const detailId=`report-detail-${r.report_id}`;
   const chartId=`report-chart-${r.report_id}`;
   const canvasId=`report-chart-canvas-${r.report_id}`;
+  const flowCanvasId=`report-flow-canvas-${r.report_id}`;
   const statusId=`report-chart-status-${r.report_id}`;
   return `
     <div class='report-card'>
@@ -1562,6 +1563,8 @@ function renderResearchReportCard(r){
             </div>
           </div>
           <canvas id='${canvasId}'></canvas>
+          <div class='report-chart-title' style='margin:12px 0 8px'>외국인/기관 순매수 추이</div>
+          <canvas id='${flowCanvasId}'></canvas>
           <div id='${statusId}' class='report-chart-status'>상세 보기를 열면 주가와 목표가를 함께 불러옵니다.</div>
         </div>
         <h4>목표가 이유</h4>
@@ -1587,7 +1590,8 @@ function toggleReportDetail(id){
 async function loadReportPriceChart(detailId, period, btn){
   const el=document.getElementById(detailId);
   if(!el) return;
-  const canvas=el.querySelector("canvas");
+  const canvas=el.querySelector("[id^='report-chart-canvas-']");
+  const flowCanvas=el.querySelector("[id^='report-flow-canvas-']");
   const status=el.querySelector(".report-chart-status");
   const code=el.dataset.stockCode || "";
   const reportDate=el.dataset.reportDate || "";
@@ -1606,8 +1610,10 @@ async function loadReportPriceChart(detailId, period, btn){
     const data=await res.json();
     if(!data.ok) throw new Error(data.error || "주가 그래프 조회 실패");
     drawReportPriceChart(canvas, data);
+    drawThemeFlowChart(flowCanvas, data);
     const targetText=data.targetSeries.length ? `목표가 ${data.targetSeries.length}건` : "목표가 없음";
-    if(status) status.innerHTML=`<span class='ok'>${escapeHtml(data.stockName || code)}</span> / 종가 ${data.closeSeries.length}일 / ${targetText} / ${escapeHtml(data.start)} ~ ${escapeHtml(data.end)}`;
+    const flowText=data.flowSeries && data.flowSeries.length ? `수급 ${data.flowSeries.length}일` : "수급 없음";
+    if(status) status.innerHTML=`<span class='ok'>${escapeHtml(data.stockName || code)}</span> / 종가 ${data.closeSeries.length}일 / ${targetText} / ${flowText} / ${escapeHtml(data.start)} ~ ${escapeHtml(data.end)}`;
   }catch(e){
     if(status) status.innerHTML=`<span class='err'>주가 그래프 오류: ${escapeHtml(e.message)}</span>`;
   }
@@ -2410,6 +2416,42 @@ def target_price_series(stock_code, start, end):
         })
     return out
 
+def investor_flow_series(stock_code, start, end):
+    code=normalize_stock_code(stock_code)
+    if not report_db_exists() or not code:
+        return []
+    con=db_connect()
+    try:
+        try:
+            rows=db_rows(
+                con,
+                """
+                SELECT trade_date, stock_name, close_price, volume,
+                       foreign_net_volume, institution_net_volume,
+                       foreign_net_amount, institution_net_amount
+                FROM theme_investor_flows
+                WHERE stock_code=? AND trade_date BETWEEN ? AND ?
+                ORDER BY trade_date
+                """,
+                (code, start, end),
+            )
+        except sqlite3.OperationalError:
+            rows=[]
+    finally:
+        con.close()
+    return [
+        {
+            "date":r.get("trade_date"),
+            "close":r.get("close_price"),
+            "volume":r.get("volume"),
+            "foreignNetVolume":r.get("foreign_net_volume"),
+            "institutionNetVolume":r.get("institution_net_volume"),
+            "foreignNetAmount":r.get("foreign_net_amount"),
+            "institutionNetAmount":r.get("institution_net_amount"),
+        }
+        for r in rows
+    ]
+
 def report_context_from_id(report_id):
     if not report_id or not report_db_exists():
         return {}
@@ -2439,6 +2481,7 @@ def report_price_chart_payload(stock_code="", report_date="", period="6m", repor
     start,end=chart_date_range(report_date, period)
     close_rows=stock_close_series(code, start, end)
     targets=target_price_series(code, start, end)
+    flow_rows=investor_flow_series(code, start, end)
     stock_name=ctx.get("stockName") or ""
     if report_db_exists():
         con=db_connect()
@@ -2456,7 +2499,9 @@ def report_price_chart_payload(stock_code="", report_date="", period="6m", repor
         "closeSeries":[{"date":r["date"], "close":r["close"]} for r in close_rows],
         "ohlcv":close_rows,
         "targetSeries":targets,
+        "flowSeries":flow_rows,
         "provider":"FinanceDataReader",
+        "flowProvider":"theme_investor_flows",
     }
 
 def theme_stock_chart_payload(stock_code="", stock_name="", start="", end=""):
