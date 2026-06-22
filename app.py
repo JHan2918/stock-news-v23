@@ -165,7 +165,7 @@ button{background:var(--blue);color:white;border:0;border-radius:10px;padding:12
 <div class="desc">뉴스 검색, 속보, 매크로, 이벤트 사전을 한 화면에서 보는 주식 투자 보조 대시보드입니다.</div>
 <div class="tabs">
   <button class="tabbtn active" onclick="showTab('searchTab', this)">뉴스검색</button>
-  <button class="tabbtn" onclick="showTab('breakingTab', this); loadBreakingNews();">속보뉴스</button>
+  <button class="tabbtn" onclick="openBreakingTab(this)">속보뉴스</button>
   <button class="tabbtn" onclick="showTab('macroTab', this)">매크로</button>
   <button class="tabbtn" onclick="showTab('reportTab', this); loadResearchReports(false);">보고서</button>
   <button class="tabbtn" onclick="showTab('exportTab', this); loadExportDashboard(false);">산업데이터</button>
@@ -785,6 +785,15 @@ async function resetBreakingTopics(){
   }catch(e){ if(st) st.innerHTML=`<span class='err'>복원 오류: ${escapeHtml(e.message)}</span>`; }
 }
 
+function openBreakingTab(btn){
+  showTab('breakingTab', btn);
+  if(window.LAST_BREAKING_DATA){
+    renderBreakingDashboard(window.LAST_BREAKING_DATA);
+    return;
+  }
+  loadBreakingNews();
+}
+
 async function loadBreakingNews(){
   const status=document.getElementById("breakingStatus");
   const topics=document.getElementById("breakingTopics");
@@ -809,31 +818,40 @@ async function loadBreakingNews(){
       return;
     }
 
-    status.innerHTML=`<span class="ok">${data.periodLabel} / 내뉴스 주제 ${data.topicCount||0}개 / 중복 제거 후 전체 ${data.total}건 / 업데이트 ${data.generatedAt}</span>` + (data.errors && data.errors.length ? `<br><span class="warn">${data.errors.join(" / ")}</span>` : "");
-
-    data.topics.forEach(t=>{
-      const div=document.createElement("div");
-      div.className="card";
-      div.onclick=()=>renderBreakingTopicNews(t.name, t.items || []);
-      div.innerHTML=`<div class="label">${escapeHtml(t.name)}</div><div class="num">${t.count}</div><div class="sub">관련 속보 보기</div>`;
-      topics.appendChild(div);
-    });
-
     window.LAST_BREAKING_DATA = data;
-
-    (data.keywordStats || []).slice(0,16).forEach(k=>{
-      const actualCount=countBreakingKeywordNews(k.keyword, data.topItems || []);
-      if(actualCount <= 0) return;
-      const div=document.createElement("div");
-      div.className="card";
-      div.onclick=()=>renderBreakingKeywordNews(k.keyword, data.topItems || []);
-      div.innerHTML=`<div class="label">${escapeHtml(k.keyword)}</div><div class="num">${actualCount}</div><div class="sub">클릭하면 관련 속보 표시 / 시장점수 ${k.marketScore || k.impact || 0}</div>`;
-      keywords.appendChild(div);
-    });
-
-    news.innerHTML="<div class='meta'>주제별 뉴스 건수 또는 속보 키워드를 클릭하면 관련 뉴스가 여기에 표시됩니다.</div>";
+    renderBreakingDashboard(data);
   }catch(e){
     status.innerHTML=`<span class="err">속보 오류: ${e.message}</span>`;
+  }
+}
+
+function renderBreakingDashboard(data){
+  const status=document.getElementById("breakingStatus");
+  const topics=document.getElementById("breakingTopics");
+  const keywords=document.getElementById("breakingKeywords");
+  const news=document.getElementById("breakingNews");
+  if(!status || !topics || !keywords || !news) return;
+  topics.innerHTML="";
+  keywords.innerHTML="";
+  status.innerHTML=`<span class="ok">${data.periodLabel} / 내뉴스 주제 ${data.topicCount||0}개 / 중복 제거 후 전체 ${data.total}건 / 업데이트 ${data.generatedAt}</span>` + (data.errors && data.errors.length ? `<br><span class="warn">${data.errors.join(" / ")}</span>` : "");
+  (data.topics || []).forEach(t=>{
+    const div=document.createElement("div");
+    div.className="card";
+    div.onclick=()=>renderBreakingTopicNews(t.name, t.items || []);
+    div.innerHTML=`<div class="label">${escapeHtml(t.name)}</div><div class="num">${t.count}</div><div class="sub">관련 속보 보기</div>`;
+    topics.appendChild(div);
+  });
+  (data.keywordStats || []).slice(0,16).forEach(k=>{
+    const actualCount=countBreakingKeywordNews(k.keyword, data.topItems || []);
+    if(actualCount <= 0) return;
+    const div=document.createElement("div");
+    div.className="card";
+    div.onclick=()=>renderBreakingKeywordNews(k.keyword, data.topItems || []);
+    div.innerHTML=`<div class="label">${escapeHtml(k.keyword)}</div><div class="num">${actualCount}</div><div class="sub">클릭하면 관련 속보 표시 / 시장점수 ${k.marketScore || k.impact || 0}</div>`;
+    keywords.appendChild(div);
+  });
+  if(!news.innerHTML.trim()){
+    news.innerHTML="<div class='meta'>주제별 뉴스 건수 또는 속보 키워드를 클릭하면 관련 뉴스가 여기에 표시됩니다.</div>";
   }
 }
 
