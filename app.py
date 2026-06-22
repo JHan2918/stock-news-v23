@@ -169,7 +169,7 @@ button{background:var(--blue);color:white;border:0;border-radius:10px;padding:12
   <button class="tabbtn" onclick="showTab('macroTab', this)">매크로</button>
   <button class="tabbtn" onclick="showTab('reportTab', this); loadResearchReports(false);">보고서</button>
   <button class="tabbtn" onclick="showTab('exportTab', this); loadExportDashboard(false);">산업데이터</button>
-  <button class="tabbtn" onclick="showTab('themeTab', this); loadThemeDashboard(false);">테마</button>
+  <button class="tabbtn" onclick="openThemeTab(this)">테마</button>
   <button class="tabbtn" onclick="showTab('dictTab', this)">이벤트사전</button>
 </div>
 </div>
@@ -1110,6 +1110,15 @@ function signedMoneyText(v){
   return sign+n.toLocaleString("ko-KR");
 }
 
+function openThemeTab(btn){
+  showTab('themeTab', btn);
+  if(LAST_THEME_DATA){
+    renderThemeDashboard(LAST_THEME_DATA);
+    return;
+  }
+  loadThemeDashboard(false);
+}
+
 async function loadThemeDashboard(useFilters){
   const status=document.getElementById("themeStatus");
   const cards=document.getElementById("themeCards");
@@ -1136,6 +1145,10 @@ async function loadThemeDashboard(useFilters){
       return;
     }
     LAST_THEME_DATA=data;
+    const s=document.getElementById("themeStart");
+    const e=document.getElementById("themeEnd");
+    if(s && data.start) s.value=data.start;
+    if(e && data.end) e.value=data.end;
     renderThemeDashboard(data);
   }catch(e){
     status.innerHTML=`<span class='err'>테마 오류: ${escapeHtml(e.message)}</span>`;
@@ -1146,7 +1159,7 @@ function renderThemeDashboard(data){
   const status=document.getElementById("themeStatus");
   const cards=document.getElementById("themeCards");
   const themes=data.themes || [];
-  status.innerHTML=`<span class='ok'>${escapeHtml(data.start || "-")} ~ ${escapeHtml(data.end || "-")} / 테마 ${themes.length}개 / ${escapeHtml(data.provider || "")}</span>` + (data.supplyProvider ? ` <span class='meta'>/ 수급 ${escapeHtml(data.supplyProvider)}</span>` : "");
+  status.innerHTML=`<span class='ok'>${escapeHtml(data.start || "-")} ~ ${escapeHtml(data.end || "-")} / 테마 ${themes.length}개 / ${escapeHtml(data.provider || "")}</span>` + (data.supplyProvider ? ` <span class='meta'>/ 수급 ${escapeHtml(data.supplyProvider)}</span>` : "") + (data.cached ? " <span class='meta'>/ 캐시</span>" : "");
   if(!themes.length){
     cards.innerHTML="<div class='emptybox'>표시할 테마 데이터가 없습니다.</div>";
     return;
@@ -3485,6 +3498,8 @@ THEME_STOCK_CODE_FALLBACK = {
     "삼양식품":"003230","농심":"004370","오리온":"271560","CJ제일제당":"097950","빙그레":"005180",
     "NAVER":"035420","카카오":"035720","더존비즈온":"012510","이스트소프트":"047560","솔트룩스":"304100",
 }
+THEME_DASHBOARD_CACHE = {}
+THEME_CACHE_SECONDS = 600
 
 def theme_date_range(start="", end=""):
     today=datetime.now(KST).date()
@@ -3594,6 +3609,13 @@ def stock_theme_snapshot(code, start, end, pykrx_stock=None, fdr=None):
 
 def theme_dashboard_payload(start="", end=""):
     start,end=theme_date_range(start, end)
+    cache_key=(start, end)
+    cached=THEME_DASHBOARD_CACHE.get(cache_key)
+    now=time.time()
+    if cached and now-cached.get("loaded_at", 0) < THEME_CACHE_SECONDS:
+        data=json.loads(json.dumps(cached["data"], ensure_ascii=False))
+        data["cached"]=True
+        return data
     lookup=stock_lookup_by_name()
     pykrx_stock=pykrx_stock_module()
     fdr=fdr_module()
@@ -3632,7 +3654,7 @@ def theme_dashboard_payload(start="", end=""):
             "score":score, "stocks":stock_rows,
         })
     themes.sort(key=lambda t:(t["score"], t["changePct"], t["amount"]), reverse=True)
-    return {
+    payload={
         "ok":True,
         "start":start, "end":end,
         "generatedAt":datetime.now(KST).strftime("%Y-%m-%d %H:%M:%S"),
@@ -3640,6 +3662,8 @@ def theme_dashboard_payload(start="", end=""):
         "supplyProvider":"/".join(sorted(p for p in supply_providers if p and p!="none")) or "none",
         "themes":themes,
     }
+    THEME_DASHBOARD_CACHE[cache_key]={"loaded_at":now, "data":payload}
+    return payload
 
 class Handler(BaseHTTPRequestHandler):
     def send_content(self,status,content,ctype="text/html; charset=utf-8"):
