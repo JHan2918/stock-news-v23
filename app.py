@@ -154,7 +154,7 @@ button{background:var(--blue);color:white;border:0;border-radius:10px;padding:12
 .report-controls{display:grid;grid-template-columns:minmax(150px,170px) minmax(150px,170px) minmax(260px,1fr) auto auto;gap:10px;align-items:end}.report-controls input{width:100%;min-width:0}.report-controls button{height:42px;white-space:nowrap;padding:0 14px}.report-list{display:grid;grid-template-columns:1fr;gap:10px}.report-card{background:#202832;border:1px solid #344151;border-radius:12px;padding:12px}.report-card h3{margin:0 0 6px;font-size:17px}.report-meta{display:flex;gap:8px;flex-wrap:wrap;color:#9fb0bf;font-size:12px;margin-bottom:8px}.report-chip{display:inline-block;border:1px solid #4f77aa;background:#26384d;color:#d7e7ff;border-radius:999px;padding:2px 7px;margin:2px;font-size:12px}.report-price{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:8px;margin:8px 0}.report-price div{background:#111820;border:1px solid #344151;border-radius:10px;padding:8px}.report-price span{display:block;color:#9fb0bf;font-size:12px}.report-price b{display:block;margin-top:3px;color:#d7e7ff}.report-summary{line-height:1.65;color:#dfe8f2}.report-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}.report-actions a{display:inline-block;background:#2f81f7;color:white;text-decoration:none;border-radius:9px;padding:7px 10px;font-size:13px}.report-actions button{padding:7px 10px;font-size:13px}.report-detail{margin-top:8px;border-top:1px solid #344151;padding-top:8px}.report-detail h4{margin:8px 0 4px}.report-detail ul{margin:6px 0 0 18px;padding:0}.report-detail li{margin:4px 0;line-height:1.55}.report-statbar{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:8px}.report-stat{background:#202832;border:1px solid #344151;border-radius:12px;padding:10px}.report-stat .v{font-size:22px;font-weight:bold;color:#9dccff}.report-stat .k{font-size:12px;color:#9fb0bf}@media(max-width:980px){.report-controls{grid-template-columns:1fr 1fr}.report-controls>div:nth-child(3){grid-column:1/-1}.report-controls button{width:100%}}@media(max-width:620px){.report-controls{grid-template-columns:1fr}}
 .report-chart{margin:10px 0 12px;background:#111820;border:1px solid #344151;border-radius:10px;padding:10px}.report-chart-head{display:flex;justify-content:space-between;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:8px}.report-chart-title{font-weight:700}.report-periods{display:flex;gap:6px;flex-wrap:wrap}.report-periods button{height:30px;padding:0 9px;border-radius:8px;background:#26384d;border:1px solid #4f77aa;font-size:12px}.report-periods button.active{background:#2f81f7;border-color:#7fb4ff}.report-chart canvas{width:100%;height:260px;display:block;background:#0d131a;border:1px solid #263544;border-radius:8px}.report-chart-status{margin-top:7px;color:#9fb0bf;font-size:12px}@media(max-width:620px){.report-chart canvas{height:220px}}
 .stock-suggest-box{position:relative}.stock-suggestions{position:absolute;left:0;right:0;top:64px;z-index:40;background:#0d131a;border:1px solid #3b4a5b;border-radius:8px;max-height:260px;overflow:auto;box-shadow:0 12px 30px rgba(0,0,0,.38)}.stock-suggestion{display:flex;justify-content:space-between;gap:10px;padding:9px 10px;border-bottom:1px solid #243140;cursor:pointer}.stock-suggestion:hover,.stock-suggestion.active{background:#1e3145}.stock-suggestion:last-child{border-bottom:0}.stock-suggestion b{font-size:14px}.stock-suggestion span{color:#9fb0bf;font-size:12px;white-space:nowrap}
-.theme-controls{display:grid;grid-template-columns:minmax(130px,160px) minmax(130px,160px) auto 1fr;gap:10px;align-items:end}.theme-controls input,.theme-controls select{width:100%;min-width:0}.theme-controls button{height:42px;white-space:nowrap;padding:0 14px}.theme-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px}.theme-card{background:#202832;border:1px solid #344151;border-radius:12px;padding:12px;cursor:pointer}.theme-card:hover{border-color:#6fa7ee}.theme-card.active{border-color:#7fb4ff;box-shadow:0 0 0 1px #2f81f7 inset}.theme-card h3{margin:0 0 8px;font-size:18px}.theme-score{font-size:28px;font-weight:800;color:#9dccff}.theme-card-line{display:grid;grid-template-columns:1fr auto;gap:8px;margin-top:6px;font-size:13px}.theme-bar{height:8px;background:#344151;border-radius:999px;overflow:hidden;margin-top:9px}.theme-bar span{display:block;height:100%;background:#7db1ff}.theme-table{width:100%;border-collapse:collapse;font-size:13px}.theme-table th,.theme-table td{border-bottom:1px solid #344151;padding:7px;text-align:right}.theme-table th:first-child,.theme-table td:first-child{text-align:left}.theme-table th{color:#9fb0bf;font-weight:normal}.theme-supply{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px}.theme-supply-card{background:#202832;border:1px solid #344151;border-radius:12px;padding:10px}.theme-supply-card .v{font-size:22px;font-weight:bold;color:#d7e7ff}.theme-supply-card .k{font-size:12px;color:#9fb0bf}.theme-pos{color:#8aff8a}.theme-neg{color:#ff8585}@media(max-width:760px){.theme-controls{grid-template-columns:1fr 1fr}.theme-controls>div:nth-child(4){grid-column:1/-1}.theme-controls button{width:100%}}
+.theme-controls{display:grid;grid-template-columns:minmax(130px,160px) minmax(130px,160px) auto 1fr;gap:10px;align-items:end}.theme-controls input,.theme-controls select{width:100%;min-width:0}.theme-controls button{height:42px;white-space:nowrap;padding:0 14px}.theme-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px}.theme-card{background:#202832;border:1px solid #344151;border-radius:12px;padding:12px;cursor:pointer}.theme-card:hover{border-color:#6fa7ee}.theme-card.active{border-color:#7fb4ff;box-shadow:0 0 0 1px #2f81f7 inset}.theme-card h3{margin:0 0 8px;font-size:18px}.theme-score{font-size:28px;font-weight:800;color:#9dccff}.theme-card-line{display:grid;grid-template-columns:1fr auto;gap:8px;margin-top:6px;font-size:13px}.theme-bar{height:8px;background:#344151;border-radius:999px;overflow:hidden;margin-top:9px}.theme-bar span{display:block;height:100%;background:#7db1ff}.theme-table{width:100%;border-collapse:collapse;font-size:13px}.theme-table th,.theme-table td{border-bottom:1px solid #344151;padding:7px;text-align:right}.theme-table th:first-child,.theme-table td:first-child{text-align:left}.theme-table th{color:#9fb0bf;font-weight:normal}.theme-stock-row{cursor:pointer}.theme-stock-row:hover{background:#202832}.theme-supply{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px}.theme-supply-card{background:#202832;border:1px solid #344151;border-radius:12px;padding:10px}.theme-supply-card .v{font-size:22px;font-weight:bold;color:#d7e7ff}.theme-supply-card .k{font-size:12px;color:#9fb0bf}.theme-pos{color:#8aff8a}.theme-neg{color:#ff8585}.theme-stock-detail{margin-top:12px;background:#111820;border:1px solid #344151;border-radius:12px;padding:12px}.theme-stock-detail.hidden{display:none}.theme-stock-detail h3{margin:0 0 8px}.theme-stock-charts{display:grid;grid-template-columns:1fr;gap:12px}.theme-stock-chartbox{background:#0d131a;border:1px solid #263544;border-radius:10px;padding:10px}.theme-stock-chartbox h4{margin:0 0 8px;font-size:15px}.theme-stock-chartbox canvas{width:100%;height:260px;display:block;background:#0d131a;border:1px solid #263544;border-radius:8px}.theme-stock-status{margin-top:7px;color:#9fb0bf;font-size:12px}@media(max-width:760px){.theme-controls{grid-template-columns:1fr 1fr}.theme-controls>div:nth-child(4){grid-column:1/-1}.theme-controls button{width:100%}.theme-stock-chartbox canvas{height:220px}}
 
 </style>
 </head>
@@ -1252,16 +1252,32 @@ function renderThemeDetail(theme){
       const f=Number(r.foreignNetBuy || 0);
       const i=Number(r.institutionNetBuy || 0);
       const ok=r.supplyAvailable===true;
-      return `<tr>
+      const codeArg=JSON.stringify(r.code || "").replace(/'/g,"&#039;");
+      const nameArg=JSON.stringify(r.name || theme.name || "").replace(/'/g,"&#039;");
+      return `<tr class='theme-stock-row' onclick='loadThemeStockDetail(${codeArg},${nameArg})'>
         <td>${escapeHtml(r.name || "")}</td>
         <td>${escapeHtml(r.code || "")}</td>
         <td class='${ch>=0?"theme-pos":"theme-neg"}'>${ch>0?"+":""}${ch.toFixed(2)}%</td>
         <td>${signedMoneyText(r.amount)}</td>
         <td class='${f>=0?"theme-pos":"theme-neg"}'>${ok?signedMoneyText(f)+" / "+signedQtyText(r.foreignNetVolume):"-"}</td>
         <td class='${i>=0?"theme-pos":"theme-neg"}'>${ok?signedMoneyText(i)+" / "+signedQtyText(r.institutionNetVolume):"-"}</td>
-        <td><button onclick='searchThemeNews("${escapeHtml(r.name || theme.name || "")}")' style='padding:5px 8px;font-size:12px'>검색</button></td>
+        <td><button onclick='event.stopPropagation();searchThemeNews(${nameArg})' style='padding:5px 8px;font-size:12px'>검색</button></td>
       </tr>`;
     }).join("")+`</tbody></table>
+    <div id='themeStockDetail' class='theme-stock-detail hidden'>
+      <h3 id='themeStockDetailTitle'>종목 수급/주가 추이</h3>
+      <div class='theme-stock-charts'>
+        <div class='theme-stock-chartbox'>
+          <h4>종가선</h4>
+          <canvas id='themeStockPriceCanvas'></canvas>
+        </div>
+        <div class='theme-stock-chartbox'>
+          <h4>외국인/기관 순매수 추이</h4>
+          <canvas id='themeStockFlowCanvas'></canvas>
+        </div>
+      </div>
+      <div id='themeStockDetailStatus' class='theme-stock-status'>종목을 클릭하면 선택 기간 기준 데이터를 불러옵니다.</div>
+    </div>
     <div style='margin-top:10px'>${(theme.newsKeywords||theme.keywords||[]).map(k=>`<span class='pill'>${escapeHtml(k)}</span>`).join("")}</div>`;
 }
 
@@ -1270,6 +1286,145 @@ function searchThemeNews(keyword){
   const q=document.getElementById("extraKeywords");
   if(q) q.value=keyword;
   clearResultsOnly();
+}
+
+async function loadThemeStockDetail(code, name){
+  const box=document.getElementById("themeStockDetail");
+  const title=document.getElementById("themeStockDetailTitle");
+  const status=document.getElementById("themeStockDetailStatus");
+  const priceCanvas=document.getElementById("themeStockPriceCanvas");
+  const flowCanvas=document.getElementById("themeStockFlowCanvas");
+  if(!box || !status || !priceCanvas || !flowCanvas) return;
+  box.classList.remove("hidden");
+  if(title) title.textContent=`${name || code} 수급/주가 추이`;
+  if(!code){
+    status.innerHTML="<span class='err'>종목코드가 없어 데이터를 불러올 수 없습니다.</span>";
+    return;
+  }
+  const start=document.getElementById("themeStart")?.value || "";
+  const end=document.getElementById("themeEnd")?.value || "";
+  status.textContent="주가와 외국인/기관 수급 데이터를 불러오는 중...";
+  try{
+    const params=new URLSearchParams({stock_code:code, stock_name:name || ""});
+    if(start) params.set("start", start);
+    if(end) params.set("end", end);
+    const res=await fetch(`/api/theme-stock-chart?${params.toString()}&ts=${Date.now()}`);
+    const data=await res.json();
+    if(!data.ok) throw new Error(data.error || "테마 종목 데이터 조회 실패");
+    drawThemePriceChart(priceCanvas, data);
+    drawThemeFlowChart(flowCanvas, data);
+    status.innerHTML=`<span class='ok'>${escapeHtml(data.stockName || name || code)}</span> / 종가 ${data.closeSeries.length}일 / 수급 ${data.flowSeries.length}일 / ${escapeHtml(data.start)} ~ ${escapeHtml(data.end)}`;
+  }catch(e){
+    status.innerHTML=`<span class='err'>테마 종목 그래프 오류: ${escapeHtml(e.message)}</span>`;
+  }
+}
+
+function setupCanvas(canvas){
+  const rect=canvas.getBoundingClientRect();
+  const dpr=window.devicePixelRatio || 1;
+  const w=Math.max(1, rect.width);
+  const h=Math.max(1, rect.height);
+  canvas.width=Math.floor(w*dpr);
+  canvas.height=Math.floor(h*dpr);
+  const ctx=canvas.getContext("2d");
+  ctx.setTransform(dpr,0,0,dpr,0,0);
+  ctx.clearRect(0,0,w,h);
+  ctx.fillStyle="#0d131a";
+  ctx.fillRect(0,0,w,h);
+  return {ctx,w,h};
+}
+
+function drawThemePriceChart(canvas, data){
+  if(!canvas) return;
+  const {ctx,w,h}=setupCanvas(canvas);
+  const rows=data.closeSeries || [];
+  if(!rows.length){
+    ctx.fillStyle="#9fb0bf"; ctx.font="13px Segoe UI"; ctx.fillText("주가 데이터가 없습니다.",18,28); return;
+  }
+  const pad={l:54,r:76,t:24,b:42};
+  const plotW=w-pad.l-pad.r, plotH=h-pad.t-pad.b;
+  const startDate=new Date(data.start), endDate=new Date(data.end);
+  const totalMs=Math.max(1,endDate-startDate);
+  const xOf=d=>pad.l+(new Date(d)-startDate)/totalMs*plotW;
+  const vals=rows.map(r=>Number(r.close)).filter(Number.isFinite);
+  const min=Math.min(...vals), max=Math.max(...vals), range=Math.max(1,max-min);
+  const yOf=v=>pad.t+(max-Number(v))/range*plotH;
+  ctx.strokeStyle="#263544"; ctx.fillStyle="#9fb0bf"; ctx.font="12px Segoe UI"; ctx.textAlign="right";
+  for(let i=0;i<=4;i++){
+    const y=pad.t+plotH*i/4, val=max-range*i/4;
+    ctx.beginPath(); ctx.moveTo(pad.l,y); ctx.lineTo(w-pad.r,y); ctx.stroke();
+    ctx.fillText(Math.round(val).toLocaleString("ko-KR"), w-8, y+4);
+  }
+  ctx.strokeStyle="#7db1ff"; ctx.lineWidth=2; ctx.beginPath();
+  rows.forEach((p,i)=>{const x=xOf(p.date), y=yOf(p.close); if(i===0) ctx.moveTo(x,y); else ctx.lineTo(x,y);});
+  ctx.stroke();
+  const latest=rows[rows.length-1];
+  ctx.textAlign="left"; ctx.fillStyle="#7db1ff"; ctx.fillText("종가", pad.l, 16);
+  ctx.fillStyle="#9fb0bf"; ctx.fillText(rows[0].date, pad.l, h-14);
+  ctx.textAlign="right"; ctx.fillText(`${latest.date} / ${Number(latest.close).toLocaleString("ko-KR")}원`, w-pad.r, h-14);
+  ctx.textAlign="left";
+}
+
+function drawThemeFlowChart(canvas, data){
+  if(!canvas) return;
+  const {ctx,w,h}=setupCanvas(canvas);
+  const rows=data.flowSeries || [];
+  if(!rows.length){
+    ctx.fillStyle="#9fb0bf"; ctx.font="13px Segoe UI"; ctx.fillText("외국인/기관 수급 데이터가 없습니다.",18,28); return;
+  }
+  const pad={l:64,r:86,t:26,b:46};
+  const plotW=w-pad.l-pad.r, plotH=h-pad.t-pad.b;
+  const startDate=new Date(data.start), endDate=new Date(data.end);
+  const totalMs=Math.max(1,endDate-startDate);
+  const xOf=d=>pad.l+(new Date(d)-startDate)/totalMs*plotW;
+  let foreignCum=0, instCum=0;
+  const series=rows.map(r=>{
+    const f=Number(r.foreignNetVolume || 0);
+    const i=Number(r.institutionNetVolume || 0);
+    foreignCum+=f; instCum+=i;
+    return {...r, foreign:f, institution:i, foreignCum, institutionCum:instCum};
+  });
+  const vals=[];
+  series.forEach(r=>vals.push(r.foreign,r.institution,r.foreignCum,r.institutionCum));
+  const maxAbs=Math.max(1,...vals.map(v=>Math.abs(Number(v)||0)));
+  const yZero=pad.t+plotH/2;
+  const yOf=v=>yZero-(Number(v)||0)/maxAbs*(plotH/2*0.88);
+  ctx.strokeStyle="#263544"; ctx.fillStyle="#9fb0bf"; ctx.font="12px Segoe UI"; ctx.textAlign="right";
+  [-1,-0.5,0,0.5,1].forEach(t=>{
+    const y=yOf(maxAbs*t);
+    ctx.beginPath(); ctx.moveTo(pad.l,y); ctx.lineTo(w-pad.r,y); ctx.stroke();
+    ctx.fillText(formatQtyAxis(maxAbs*t), w-8, y+4);
+  });
+  const step=plotW/Math.max(1,series.length);
+  const barW=Math.max(2,Math.min(10,step*0.28));
+  series.forEach(r=>{
+    const x=xOf(r.date);
+    const yf=yOf(r.foreign), yi=yOf(r.institution);
+    ctx.fillStyle=r.foreign>=0?"rgba(125,177,255,.75)":"rgba(125,177,255,.35)";
+    ctx.fillRect(x-barW-1, Math.min(yZero,yf), barW, Math.max(1,Math.abs(yZero-yf)));
+    ctx.fillStyle=r.institution>=0?"rgba(255,138,128,.75)":"rgba(255,138,128,.35)";
+    ctx.fillRect(x+1, Math.min(yZero,yi), barW, Math.max(1,Math.abs(yZero-yi)));
+  });
+  const drawLine=(key,color)=>{
+    ctx.strokeStyle=color; ctx.lineWidth=2; ctx.beginPath();
+    series.forEach((r,idx)=>{const x=xOf(r.date), y=yOf(r[key]); if(idx===0) ctx.moveTo(x,y); else ctx.lineTo(x,y);});
+    ctx.stroke();
+  };
+  drawLine("foreignCum","#7db1ff");
+  drawLine("institutionCum","#ff8a80");
+  ctx.textAlign="left"; ctx.fillStyle="#7db1ff"; ctx.fillText("외국인 막대/누적", pad.l, 16);
+  ctx.fillStyle="#ff8a80"; ctx.fillText("기관 막대/누적", pad.l+112, 16);
+  ctx.fillStyle="#9fb0bf"; ctx.fillText(series[0].date, pad.l, h-14);
+  const last=series[series.length-1];
+  ctx.textAlign="right"; ctx.fillText(`${last.date} / 외 ${signedQtyText(last.foreignCum)} / 기 ${signedQtyText(last.institutionCum)}`, w-pad.r, h-14);
+  ctx.textAlign="left";
+}
+
+function formatQtyAxis(v){
+  const n=Number(v)||0, abs=Math.abs(n), sign=n>0?"+":n<0?"-":"";
+  if(abs>=1000000) return sign+(abs/1000000).toFixed(1)+"백만";
+  if(abs>=10000) return sign+(abs/10000).toFixed(0)+"만";
+  return sign+Math.round(abs).toLocaleString("ko-KR");
 }
 
 async function fetchReportStockSuggestions(){
@@ -2302,6 +2457,76 @@ def report_price_chart_payload(stock_code="", report_date="", period="6m", repor
         "ohlcv":close_rows,
         "targetSeries":targets,
         "provider":"FinanceDataReader",
+    }
+
+def theme_stock_chart_payload(stock_code="", stock_name="", start="", end=""):
+    code=normalize_stock_code(stock_code)
+    if not code:
+        raise ValueError("종목코드가 없습니다.")
+    end_d=iso_date(end) or datetime.now(KST).date()
+    start_d=iso_date(start) or (end_d - timedelta(days=45))
+    if start_d>end_d:
+        start_d,end_d=end_d,start_d
+    start_s=start_d.strftime("%Y-%m-%d")
+    end_s=end_d.strftime("%Y-%m-%d")
+    close_rows=[]
+    price_error=""
+    try:
+        close_rows=stock_close_series(code, start_s, end_s)
+    except Exception as exc:
+        price_error=str(exc)
+    flow_rows=[]
+    db_stock_name=""
+    if report_db_exists():
+        con=db_connect()
+        try:
+            try:
+                rows=db_rows(
+                    con,
+                    """
+                    SELECT trade_date, stock_name, close_price, volume,
+                           foreign_net_volume, institution_net_volume,
+                           foreign_net_amount, institution_net_amount
+                    FROM theme_investor_flows
+                    WHERE stock_code=? AND trade_date BETWEEN ? AND ?
+                    ORDER BY trade_date
+                    """,
+                    (code, start_s, end_s),
+                )
+            except sqlite3.OperationalError:
+                rows=[]
+            for r in rows:
+                if r.get("stock_name") and not db_stock_name:
+                    db_stock_name=r.get("stock_name") or ""
+                flow_rows.append({
+                    "date":r.get("trade_date"),
+                    "close":r.get("close_price"),
+                    "volume":r.get("volume"),
+                    "foreignNetVolume":r.get("foreign_net_volume"),
+                    "institutionNetVolume":r.get("institution_net_volume"),
+                    "foreignNetAmount":r.get("foreign_net_amount"),
+                    "institutionNetAmount":r.get("institution_net_amount"),
+                })
+            if not db_stock_name:
+                row=con.execute(
+                    "SELECT stock_name FROM reports WHERE stock_code=? AND stock_name IS NOT NULL AND trim(stock_name)!='' ORDER BY report_date DESC LIMIT 1",
+                    (code,),
+                ).fetchone()
+                db_stock_name=row["stock_name"] if row else ""
+        finally:
+            con.close()
+    return {
+        "ok":True,
+        "stockCode":code,
+        "stockName":stock_name or db_stock_name or code,
+        "start":start_s,
+        "end":end_s,
+        "closeSeries":[{"date":r["date"], "close":r["close"]} for r in close_rows],
+        "ohlcv":close_rows,
+        "flowSeries":flow_rows,
+        "provider":"FinanceDataReader",
+        "flowProvider":"theme_investor_flows",
+        "priceError":price_error,
     }
 
 def industry_payload_from_db(month=""):
@@ -3867,6 +4092,18 @@ class Handler(BaseHTTPRequestHandler):
                 start=qs.get("start",[""])[0].strip()
                 end=qs.get("end",[""])[0].strip()
                 self.send_content(200, json.dumps(theme_dashboard_payload(start, end), ensure_ascii=False), "application/json; charset=utf-8")
+            except Exception as e:
+                log_error(traceback.format_exc())
+                self.send_content(500, json.dumps({"ok":False,"error":str(e)}, ensure_ascii=False), "application/json; charset=utf-8")
+        elif self.path.startswith("/api/theme-stock-chart"):
+            try:
+                from urllib.parse import urlparse, parse_qs
+                qs=parse_qs(urlparse(self.path).query)
+                stock_code=qs.get("stock_code",[""])[0].strip()
+                stock_name=qs.get("stock_name",[""])[0].strip()
+                start=qs.get("start",[""])[0].strip()
+                end=qs.get("end",[""])[0].strip()
+                self.send_content(200, json.dumps(theme_stock_chart_payload(stock_code, stock_name, start, end), ensure_ascii=False), "application/json; charset=utf-8")
             except Exception as e:
                 log_error(traceback.format_exc())
                 self.send_content(500, json.dumps({"ok":False,"error":str(e)}, ensure_ascii=False), "application/json; charset=utf-8")
