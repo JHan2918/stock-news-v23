@@ -1128,6 +1128,17 @@ function signedMoneyText(v){
   return sign+n.toLocaleString("ko-KR");
 }
 
+function signedQtyText(v){
+  if(v===null || v===undefined || v==="") return "-";
+  const n=Number(v);
+  if(!Number.isFinite(n)) return "-";
+  const sign=n>0?"+":"";
+  const abs=Math.abs(n);
+  if(abs>=1000000) return sign+(n/1000000).toFixed(1)+"백만주";
+  if(abs>=10000) return sign+(n/10000).toFixed(1)+"만주";
+  return sign+n.toLocaleString("ko-KR")+"주";
+}
+
 function openThemeTab(btn){
   showTab('themeTab', btn);
   if(LAST_THEME_DATA){
@@ -1177,7 +1188,8 @@ function renderThemeDashboard(data){
   const status=document.getElementById("themeStatus");
   const cards=document.getElementById("themeCards");
   const themes=data.themes || [];
-  status.innerHTML=`<span class='ok'>${escapeHtml(data.start || "-")} ~ ${escapeHtml(data.end || "-")} / 테마 ${themes.length}개 / ${escapeHtml(data.provider || "")}</span>` + (data.supplyProvider ? ` <span class='meta'>/ 수급 ${escapeHtml(data.supplyProvider)}</span>` : "") + (data.cached ? " <span class='meta'>/ 캐시</span>" : "");
+  const supplyLabel=data.supplyProvider && data.supplyProvider!=="none" ? `수급 ${escapeHtml(data.supplyProvider)}` : "수급 미확인";
+  status.innerHTML=`<span class='ok'>${escapeHtml(data.start || "-")} ~ ${escapeHtml(data.end || "-")} / 테마 ${themes.length}개 / ${escapeHtml(data.provider || "")}</span> <span class='meta'>/ ${supplyLabel}</span>` + (data.cached ? " <span class='meta'>/ 캐시</span>" : "");
   if(!themes.length){
     cards.innerHTML="<div class='emptybox'>표시할 테마 데이터가 없습니다.</div>";
     return;
@@ -1187,13 +1199,14 @@ function renderThemeDashboard(data){
     const cls=idx===0 && !SELECTED_THEME_KEY ? "theme-card active" : "theme-card";
     const pct=Number(t.changePct || 0);
     const supply=Number(t.netBuyTotal || 0);
+    const supplyText=t.supplyAvailable===true ? signedMoneyText(supply) : "-";
     return `<div class='${cls}' onclick='selectTheme("${escapeHtml(t.key)}")'>
       <h3>${escapeHtml(t.name)}</h3>
       <div class='theme-score'>${Number(t.score || 0).toFixed(1)}</div>
       <div class='theme-bar'><span style='width:${Math.max(4, Number(t.score || 0)/maxScore*100)}%'></span></div>
       <div class='theme-card-line'><span>평균 등락률</span><b class='${pct>=0?"theme-pos":"theme-neg"}'>${pct>0?"+":""}${pct.toFixed(2)}%</b></div>
       <div class='theme-card-line'><span>거래대금</span><b>${signedMoneyText(t.amount)}</b></div>
-      <div class='theme-card-line'><span>외국인+기관</span><b class='${supply>=0?"theme-pos":"theme-neg"}'>${signedMoneyText(supply)}</b></div>
+      <div class='theme-card-line'><span>외국인+기관</span><b class='${supply>=0?"theme-pos":"theme-neg"}'>${supplyText}</b></div>
       <div style='margin-top:8px'>${(t.keywords||[]).slice(0,4).map(k=>`<span class='pill'>${escapeHtml(k)}</span>`).join("")}</div>
     </div>`;
   }).join("");
@@ -1219,29 +1232,33 @@ function renderThemeDetail(theme){
   const foreign=Number(theme.foreignNetBuy || 0);
   const inst=Number(theme.institutionNetBuy || 0);
   const total=Number(theme.netBuyTotal || 0);
+  const hasSupply=theme.supplyAvailable===true;
+  const foreignQty=theme.foreignNetVolume;
+  const instQty=theme.institutionNetVolume;
   supply.innerHTML=`
     <div class='theme-supply-card'><div class='k'>테마</div><div class='v'>${escapeHtml(theme.name || "-")}</div></div>
-    <div class='theme-supply-card'><div class='k'>외국인 순매수</div><div class='v ${foreign>=0?"theme-pos":"theme-neg"}'>${signedMoneyText(foreign)}</div></div>
-    <div class='theme-supply-card'><div class='k'>기관 순매수</div><div class='v ${inst>=0?"theme-pos":"theme-neg"}'>${signedMoneyText(inst)}</div></div>
-    <div class='theme-supply-card'><div class='k'>합산 수급</div><div class='v ${total>=0?"theme-pos":"theme-neg"}'>${signedMoneyText(total)}</div></div>
+    <div class='theme-supply-card'><div class='k'>외국인 순매수 금액</div><div class='v ${foreign>=0?"theme-pos":"theme-neg"}'>${hasSupply?signedMoneyText(foreign):"-"}</div><div class='meta'>${hasSupply?signedQtyText(foreignQty):"수급 미확인"}</div></div>
+    <div class='theme-supply-card'><div class='k'>기관 순매수 금액</div><div class='v ${inst>=0?"theme-pos":"theme-neg"}'>${hasSupply?signedMoneyText(inst):"-"}</div><div class='meta'>${hasSupply?signedQtyText(instQty):"수급 미확인"}</div></div>
+    <div class='theme-supply-card'><div class='k'>합산 수급 금액</div><div class='v ${total>=0?"theme-pos":"theme-neg"}'>${hasSupply?signedMoneyText(total):"-"}</div><div class='meta'>${hasSupply?signedQtyText((foreignQty||0)+(instQty||0)):"pykrx 수급 데이터 없음"}</div></div>
   `;
   const rows=theme.stocks || [];
   if(!rows.length){
     stocks.innerHTML="<div class='emptybox'>이 테마에 연결된 종목이 없습니다.</div>";
     return;
   }
-  stocks.innerHTML=`<table class='theme-table'><thead><tr><th>종목</th><th>코드</th><th>등락률</th><th>거래대금</th><th>외국인</th><th>기관</th><th>뉴스</th></tr></thead><tbody>`+
+  stocks.innerHTML=`<table class='theme-table'><thead><tr><th>종목</th><th>코드</th><th>등락률</th><th>거래대금</th><th>외국인 금액/수량</th><th>기관 금액/수량</th><th>뉴스</th></tr></thead><tbody>`+
     rows.map(r=>{
       const ch=Number(r.changePct || 0);
       const f=Number(r.foreignNetBuy || 0);
       const i=Number(r.institutionNetBuy || 0);
+      const ok=r.supplyAvailable===true;
       return `<tr>
         <td>${escapeHtml(r.name || "")}</td>
         <td>${escapeHtml(r.code || "")}</td>
         <td class='${ch>=0?"theme-pos":"theme-neg"}'>${ch>0?"+":""}${ch.toFixed(2)}%</td>
         <td>${signedMoneyText(r.amount)}</td>
-        <td class='${f>=0?"theme-pos":"theme-neg"}'>${signedMoneyText(f)}</td>
-        <td class='${i>=0?"theme-pos":"theme-neg"}'>${signedMoneyText(i)}</td>
+        <td class='${f>=0?"theme-pos":"theme-neg"}'>${ok?signedMoneyText(f)+" / "+signedQtyText(r.foreignNetVolume):"-"}</td>
+        <td class='${i>=0?"theme-pos":"theme-neg"}'>${ok?signedMoneyText(i)+" / "+signedQtyText(r.institutionNetVolume):"-"}</td>
         <td><button onclick='searchThemeNews("${escapeHtml(r.name || theme.name || "")}")' style='padding:5px 8px;font-size:12px'>검색</button></td>
       </tr>`;
     }).join("")+`</tbody></table>
@@ -3586,7 +3603,7 @@ def fdr_module():
 def stock_theme_snapshot(code, start, end, pykrx_stock=None, fdr=None):
     code=normalize_stock_code(code)
     if not code:
-        return {"changePct":0, "amount":0, "foreignNetBuy":0, "institutionNetBuy":0, "provider":"none", "supplyProvider":"none"}
+        return {"changePct":0, "amount":0, "foreignNetBuy":None, "institutionNetBuy":None, "foreignNetVolume":None, "institutionNetVolume":None, "provider":"none", "supplyProvider":"none", "supplyAvailable":False}
     s8=start.replace("-","")
     e8=end.replace("-","")
     close_first=None
@@ -3618,8 +3635,10 @@ def stock_theme_snapshot(code, start, end, pykrx_stock=None, fdr=None):
                 provider="FinanceDataReader"
         except Exception:
             pass
-    foreign=0
-    institution=0
+    foreign=None
+    institution=None
+    foreign_volume=None
+    institution_volume=None
     supply_provider="none"
     if pykrx_stock:
         try:
@@ -3636,14 +3655,32 @@ def stock_theme_snapshot(code, start, end, pykrx_stock=None, fdr=None):
                 supply_provider="pykrx"
         except Exception:
             pass
+        try:
+            vol=pykrx_stock.get_market_trading_volume_by_date(s8, e8, code)
+            if vol is not None and not vol.empty:
+                if "외국인합계" in vol.columns:
+                    foreign_volume=int(float(vol["외국인합계"].fillna(0).sum()))
+                elif "외국인" in vol.columns:
+                    foreign_volume=int(float(vol["외국인"].fillna(0).sum()))
+                if "기관합계" in vol.columns:
+                    institution_volume=int(float(vol["기관합계"].fillna(0).sum()))
+                elif "기관" in vol.columns:
+                    institution_volume=int(float(vol["기관"].fillna(0).sum()))
+                supply_provider="pykrx"
+        except Exception:
+            pass
+    supply_available = foreign is not None or institution is not None or foreign_volume is not None or institution_volume is not None
     change=round((close_last-close_first)/close_first*100, 2) if close_first and close_last else 0
     return {
         "changePct":change,
         "amount":amount,
         "foreignNetBuy":foreign,
         "institutionNetBuy":institution,
+        "foreignNetVolume":foreign_volume,
+        "institutionNetVolume":institution_volume,
         "provider":provider or "none",
         "supplyProvider":supply_provider,
+        "supplyAvailable":supply_available,
     }
 
 def theme_dashboard_payload(start="", end=""):
@@ -3677,13 +3714,19 @@ def theme_dashboard_payload(start="", end=""):
                 "amount":snap["amount"],
                 "foreignNetBuy":snap["foreignNetBuy"],
                 "institutionNetBuy":snap["institutionNetBuy"],
+                "foreignNetVolume":snap["foreignNetVolume"],
+                "institutionNetVolume":snap["institutionNetVolume"],
+                "supplyAvailable":snap["supplyAvailable"],
             })
         valid=[r for r in stock_rows if r.get("code")]
         avg_change=round(sum(r["changePct"] for r in valid)/len(valid), 2) if valid else 0
         amount=sum(int(r.get("amount") or 0) for r in valid)
-        foreign=sum(int(r.get("foreignNetBuy") or 0) for r in valid)
-        institution=sum(int(r.get("institutionNetBuy") or 0) for r in valid)
-        net=foreign+institution
+        supply_valid=[r for r in valid if r.get("supplyAvailable")]
+        foreign=sum(int(r.get("foreignNetBuy") or 0) for r in supply_valid)
+        institution=sum(int(r.get("institutionNetBuy") or 0) for r in supply_valid)
+        foreign_volume=sum(int(r.get("foreignNetVolume") or 0) for r in supply_valid)
+        institution_volume=sum(int(r.get("institutionNetVolume") or 0) for r in supply_valid)
+        net=foreign+institution if supply_valid else 0
         score=round(max(0, avg_change)*12 + min(35, amount/100000000000) + max(0, net)/10000000000, 1)
         stock_rows.sort(key=lambda r:(r.get("changePct") or 0, r.get("amount") or 0), reverse=True)
         themes.append({
@@ -3691,6 +3734,8 @@ def theme_dashboard_payload(start="", end=""):
             "keywords":seed["keywords"], "newsKeywords":seed["news"],
             "changePct":avg_change, "amount":amount,
             "foreignNetBuy":foreign, "institutionNetBuy":institution, "netBuyTotal":net,
+            "foreignNetVolume":foreign_volume, "institutionNetVolume":institution_volume,
+            "supplyAvailable":bool(supply_valid),
             "score":score, "stocks":stock_rows,
         })
     themes.sort(key=lambda t:(t["score"], t["changePct"], t["amount"]), reverse=True)
