@@ -3516,6 +3516,9 @@ THEME_STOCK_CODE_FALLBACK = {
     "삼양식품":"003230","농심":"004370","오리온":"271560","CJ제일제당":"097950","빙그레":"005180",
     "NAVER":"035420","카카오":"035720","더존비즈온":"012510","이스트소프트":"047560","솔트룩스":"304100",
 }
+THEME_STOCK_DISPLAY_NAME_OVERRIDE = {
+    "079550": "LIG디펜스앤에어로스페이스",
+}
 THEME_DASHBOARD_CACHE = {}
 THEME_CACHE_SECONDS = 600
 
@@ -3548,14 +3551,20 @@ def stock_lookup_by_code():
 def resolve_theme_stock(name, name_lookup, code_lookup):
     key=normalize_stock_name(name)
     if key in name_lookup:
-        return name_lookup[key]
+        item=dict(name_lookup[key])
+        item["name"]=THEME_STOCK_DISPLAY_NAME_OVERRIDE.get(item.get("code"), item.get("name"))
+        return item
     for k,item in name_lookup.items():
         if key and (key in k or k in key):
+            item=dict(item)
+            item["name"]=THEME_STOCK_DISPLAY_NAME_OVERRIDE.get(item.get("code"), item.get("name"))
             return item
     fallback_code=THEME_STOCK_CODE_FALLBACK.get(name)
     if fallback_code:
         latest=code_lookup.get(fallback_code)
         if latest:
+            latest=dict(latest)
+            latest["name"]=THEME_STOCK_DISPLAY_NAME_OVERRIDE.get(fallback_code, latest.get("name"))
             return latest
         return {"name":name, "code":fallback_code, "market":""}
     return {"name":name, "code":"", "market":""}
