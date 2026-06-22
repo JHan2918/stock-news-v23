@@ -154,6 +154,7 @@ button{background:var(--blue);color:white;border:0;border-radius:10px;padding:12
 .report-controls{display:grid;grid-template-columns:minmax(150px,170px) minmax(150px,170px) minmax(260px,1fr) auto auto;gap:10px;align-items:end}.report-controls input{width:100%;min-width:0}.report-controls button{height:42px;white-space:nowrap;padding:0 14px}.report-list{display:grid;grid-template-columns:1fr;gap:10px}.report-card{background:#202832;border:1px solid #344151;border-radius:12px;padding:12px}.report-card h3{margin:0 0 6px;font-size:17px}.report-meta{display:flex;gap:8px;flex-wrap:wrap;color:#9fb0bf;font-size:12px;margin-bottom:8px}.report-chip{display:inline-block;border:1px solid #4f77aa;background:#26384d;color:#d7e7ff;border-radius:999px;padding:2px 7px;margin:2px;font-size:12px}.report-price{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:8px;margin:8px 0}.report-price div{background:#111820;border:1px solid #344151;border-radius:10px;padding:8px}.report-price span{display:block;color:#9fb0bf;font-size:12px}.report-price b{display:block;margin-top:3px;color:#d7e7ff}.report-summary{line-height:1.65;color:#dfe8f2}.report-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}.report-actions a{display:inline-block;background:#2f81f7;color:white;text-decoration:none;border-radius:9px;padding:7px 10px;font-size:13px}.report-actions button{padding:7px 10px;font-size:13px}.report-detail{margin-top:8px;border-top:1px solid #344151;padding-top:8px}.report-detail h4{margin:8px 0 4px}.report-detail ul{margin:6px 0 0 18px;padding:0}.report-detail li{margin:4px 0;line-height:1.55}.report-statbar{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:8px}.report-stat{background:#202832;border:1px solid #344151;border-radius:12px;padding:10px}.report-stat .v{font-size:22px;font-weight:bold;color:#9dccff}.report-stat .k{font-size:12px;color:#9fb0bf}@media(max-width:980px){.report-controls{grid-template-columns:1fr 1fr}.report-controls>div:nth-child(3){grid-column:1/-1}.report-controls button{width:100%}}@media(max-width:620px){.report-controls{grid-template-columns:1fr}}
 .report-chart{margin:10px 0 12px;background:#111820;border:1px solid #344151;border-radius:10px;padding:10px}.report-chart-head{display:flex;justify-content:space-between;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:8px}.report-chart-title{font-weight:700}.report-periods{display:flex;gap:6px;flex-wrap:wrap}.report-periods button{height:30px;padding:0 9px;border-radius:8px;background:#26384d;border:1px solid #4f77aa;font-size:12px}.report-periods button.active{background:#2f81f7;border-color:#7fb4ff}.report-chart canvas{width:100%;height:260px;display:block;background:#0d131a;border:1px solid #263544;border-radius:8px}.report-chart-status{margin-top:7px;color:#9fb0bf;font-size:12px}@media(max-width:620px){.report-chart canvas{height:220px}}
 .stock-suggest-box{position:relative}.stock-suggestions{position:absolute;left:0;right:0;top:64px;z-index:40;background:#0d131a;border:1px solid #3b4a5b;border-radius:8px;max-height:260px;overflow:auto;box-shadow:0 12px 30px rgba(0,0,0,.38)}.stock-suggestion{display:flex;justify-content:space-between;gap:10px;padding:9px 10px;border-bottom:1px solid #243140;cursor:pointer}.stock-suggestion:hover,.stock-suggestion.active{background:#1e3145}.stock-suggestion:last-child{border-bottom:0}.stock-suggestion b{font-size:14px}.stock-suggestion span{color:#9fb0bf;font-size:12px;white-space:nowrap}
+.theme-controls{display:grid;grid-template-columns:minmax(130px,160px) minmax(130px,160px) auto 1fr;gap:10px;align-items:end}.theme-controls input,.theme-controls select{width:100%;min-width:0}.theme-controls button{height:42px;white-space:nowrap;padding:0 14px}.theme-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px}.theme-card{background:#202832;border:1px solid #344151;border-radius:12px;padding:12px;cursor:pointer}.theme-card:hover{border-color:#6fa7ee}.theme-card.active{border-color:#7fb4ff;box-shadow:0 0 0 1px #2f81f7 inset}.theme-card h3{margin:0 0 8px;font-size:18px}.theme-score{font-size:28px;font-weight:800;color:#9dccff}.theme-card-line{display:grid;grid-template-columns:1fr auto;gap:8px;margin-top:6px;font-size:13px}.theme-bar{height:8px;background:#344151;border-radius:999px;overflow:hidden;margin-top:9px}.theme-bar span{display:block;height:100%;background:#7db1ff}.theme-table{width:100%;border-collapse:collapse;font-size:13px}.theme-table th,.theme-table td{border-bottom:1px solid #344151;padding:7px;text-align:right}.theme-table th:first-child,.theme-table td:first-child{text-align:left}.theme-table th{color:#9fb0bf;font-weight:normal}.theme-supply{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px}.theme-supply-card{background:#202832;border:1px solid #344151;border-radius:12px;padding:10px}.theme-supply-card .v{font-size:22px;font-weight:bold;color:#d7e7ff}.theme-supply-card .k{font-size:12px;color:#9fb0bf}.theme-pos{color:#8aff8a}.theme-neg{color:#ff8585}@media(max-width:760px){.theme-controls{grid-template-columns:1fr 1fr}.theme-controls>div:nth-child(4){grid-column:1/-1}.theme-controls button{width:100%}}
 
 </style>
 </head>
@@ -168,6 +169,7 @@ button{background:var(--blue);color:white;border:0;border-radius:10px;padding:12
   <button class="tabbtn" onclick="showTab('macroTab', this)">매크로</button>
   <button class="tabbtn" onclick="showTab('reportTab', this); loadResearchReports(false);">보고서</button>
   <button class="tabbtn" onclick="showTab('exportTab', this); loadExportDashboard(false);">산업데이터</button>
+  <button class="tabbtn" onclick="showTab('themeTab', this); loadThemeDashboard(false);">테마</button>
   <button class="tabbtn" onclick="showTab('dictTab', this)">이벤트사전</button>
 </div>
 </div>
@@ -357,6 +359,31 @@ button{background:var(--blue);color:white;border:0;border-radius:10px;padding:12
 <div class="box">
 <h2>📰 수출 데이터와 연결할 뉴스 키워드</h2>
 <div id="exportNewsBridge" class="meta"></div>
+</div>
+</div>
+
+<div id="themeTab" class="tabcontent">
+<div class="box">
+<h2>🧭 테마 대시보드</h2>
+<div class="theme-controls">
+  <div><div class="meta">시작일</div><input id="themeStart" type="date"></div>
+  <div><div class="meta">종료일</div><input id="themeEnd" type="date"></div>
+  <button onclick="loadThemeDashboard(true)" style="background:#246b45">테마 보기</button>
+  <div class="meta">러프 테마DB 기준으로 최근 등락률, 거래대금, 외국인/기관 순매수를 합산합니다.</div>
+</div>
+<div id="themeStatus" class="meta" style="margin-top:10px">테마 탭을 열면 최근 5거래일 기준 강한 테마를 보여줍니다.</div>
+</div>
+<div class="box">
+  <h2>🔥 최근 강한 테마</h2>
+  <div id="themeCards" class="theme-grid"></div>
+</div>
+<div class="box">
+  <h2>💸 선택 테마 수급</h2>
+  <div id="themeSupply" class="theme-supply"></div>
+</div>
+<div class="box">
+  <h2>📋 테마별 종목</h2>
+  <div id="themeStocks"></div>
 </div>
 </div>
 
@@ -942,6 +969,8 @@ function drawMiniChart(series){
 let LAST_EXPORT_DATA=null;
 let SELECTED_EXPORT_ITEM=null;
 let LAST_REPORT_DATA=null;
+let LAST_THEME_DATA=null;
+let SELECTED_THEME_KEY=null;
 let REPORT_STOCK_SUGGESTIONS=[];
 let REPORT_STOCK_ACTIVE=-1;
 let REPORT_STOCK_TIMER=null;
@@ -1068,6 +1097,131 @@ function localReportStockSuggestions(q){
     const code=String(item.code || "");
     return name.includes(nq) || code.includes(nq);
   }).slice(0,10);
+}
+
+function signedMoneyText(v){
+  if(v===null || v===undefined || v==="") return "-";
+  const n=Number(v);
+  if(!Number.isFinite(n)) return "-";
+  const sign=n>0?"+":"";
+  const abs=Math.abs(n);
+  if(abs>=100000000) return sign+(n/100000000).toFixed(1)+"억";
+  if(abs>=10000) return sign+(n/10000).toFixed(1)+"만";
+  return sign+n.toLocaleString("ko-KR");
+}
+
+async function loadThemeDashboard(useFilters){
+  const status=document.getElementById("themeStatus");
+  const cards=document.getElementById("themeCards");
+  const stocks=document.getElementById("themeStocks");
+  const supply=document.getElementById("themeSupply");
+  if(!status || !cards || !stocks || !supply) return;
+  status.innerHTML="테마 데이터를 불러오는 중...";
+  cards.innerHTML="";
+  stocks.innerHTML="";
+  supply.innerHTML="";
+  try{
+    const params=new URLSearchParams();
+    if(useFilters){
+      const s=document.getElementById("themeStart").value.trim();
+      const e=document.getElementById("themeEnd").value.trim();
+      if(s) params.set("start", s);
+      if(e) params.set("end", e);
+    }
+    params.set("ts", Date.now());
+    const res=await fetch(`/api/themes?${params.toString()}`);
+    const data=await res.json();
+    if(!data.ok){
+      status.innerHTML=`<span class='err'>${escapeHtml(data.error || "테마 데이터 오류")}</span>`;
+      return;
+    }
+    LAST_THEME_DATA=data;
+    renderThemeDashboard(data);
+  }catch(e){
+    status.innerHTML=`<span class='err'>테마 오류: ${escapeHtml(e.message)}</span>`;
+  }
+}
+
+function renderThemeDashboard(data){
+  const status=document.getElementById("themeStatus");
+  const cards=document.getElementById("themeCards");
+  const themes=data.themes || [];
+  status.innerHTML=`<span class='ok'>${escapeHtml(data.start || "-")} ~ ${escapeHtml(data.end || "-")} / 테마 ${themes.length}개 / ${escapeHtml(data.provider || "")}</span>` + (data.supplyProvider ? ` <span class='meta'>/ 수급 ${escapeHtml(data.supplyProvider)}</span>` : "");
+  if(!themes.length){
+    cards.innerHTML="<div class='emptybox'>표시할 테마 데이터가 없습니다.</div>";
+    return;
+  }
+  const maxScore=Math.max(...themes.map(t=>Number(t.score || 0)), 1);
+  cards.innerHTML=themes.map((t,idx)=>{
+    const cls=idx===0 && !SELECTED_THEME_KEY ? "theme-card active" : "theme-card";
+    const pct=Number(t.changePct || 0);
+    const supply=Number(t.netBuyTotal || 0);
+    return `<div class='${cls}' onclick='selectTheme("${escapeHtml(t.key)}")'>
+      <h3>${escapeHtml(t.name)}</h3>
+      <div class='theme-score'>${Number(t.score || 0).toFixed(1)}</div>
+      <div class='theme-bar'><span style='width:${Math.max(4, Number(t.score || 0)/maxScore*100)}%'></span></div>
+      <div class='theme-card-line'><span>평균 등락률</span><b class='${pct>=0?"theme-pos":"theme-neg"}'>${pct>0?"+":""}${pct.toFixed(2)}%</b></div>
+      <div class='theme-card-line'><span>거래대금</span><b>${signedMoneyText(t.amount)}</b></div>
+      <div class='theme-card-line'><span>외국인+기관</span><b class='${supply>=0?"theme-pos":"theme-neg"}'>${signedMoneyText(supply)}</b></div>
+      <div style='margin-top:8px'>${(t.keywords||[]).slice(0,4).map(k=>`<span class='pill'>${escapeHtml(k)}</span>`).join("")}</div>
+    </div>`;
+  }).join("");
+  selectTheme(SELECTED_THEME_KEY || themes[0].key);
+}
+
+function selectTheme(key){
+  if(!LAST_THEME_DATA) return;
+  SELECTED_THEME_KEY=key;
+  document.querySelectorAll(".theme-card").forEach(card=>card.classList.remove("active"));
+  const themes=LAST_THEME_DATA.themes || [];
+  const idx=themes.findIndex(t=>t.key===key);
+  const cards=document.querySelectorAll(".theme-card");
+  if(idx>=0 && cards[idx]) cards[idx].classList.add("active");
+  const theme=themes[idx>=0?idx:0];
+  renderThemeDetail(theme || {});
+}
+
+function renderThemeDetail(theme){
+  const supply=document.getElementById("themeSupply");
+  const stocks=document.getElementById("themeStocks");
+  if(!supply || !stocks) return;
+  const foreign=Number(theme.foreignNetBuy || 0);
+  const inst=Number(theme.institutionNetBuy || 0);
+  const total=Number(theme.netBuyTotal || 0);
+  supply.innerHTML=`
+    <div class='theme-supply-card'><div class='k'>테마</div><div class='v'>${escapeHtml(theme.name || "-")}</div></div>
+    <div class='theme-supply-card'><div class='k'>외국인 순매수</div><div class='v ${foreign>=0?"theme-pos":"theme-neg"}'>${signedMoneyText(foreign)}</div></div>
+    <div class='theme-supply-card'><div class='k'>기관 순매수</div><div class='v ${inst>=0?"theme-pos":"theme-neg"}'>${signedMoneyText(inst)}</div></div>
+    <div class='theme-supply-card'><div class='k'>합산 수급</div><div class='v ${total>=0?"theme-pos":"theme-neg"}'>${signedMoneyText(total)}</div></div>
+  `;
+  const rows=theme.stocks || [];
+  if(!rows.length){
+    stocks.innerHTML="<div class='emptybox'>이 테마에 연결된 종목이 없습니다.</div>";
+    return;
+  }
+  stocks.innerHTML=`<table class='theme-table'><thead><tr><th>종목</th><th>코드</th><th>등락률</th><th>거래대금</th><th>외국인</th><th>기관</th><th>뉴스</th></tr></thead><tbody>`+
+    rows.map(r=>{
+      const ch=Number(r.changePct || 0);
+      const f=Number(r.foreignNetBuy || 0);
+      const i=Number(r.institutionNetBuy || 0);
+      return `<tr>
+        <td>${escapeHtml(r.name || "")}</td>
+        <td>${escapeHtml(r.code || "")}</td>
+        <td class='${ch>=0?"theme-pos":"theme-neg"}'>${ch>0?"+":""}${ch.toFixed(2)}%</td>
+        <td>${signedMoneyText(r.amount)}</td>
+        <td class='${f>=0?"theme-pos":"theme-neg"}'>${signedMoneyText(f)}</td>
+        <td class='${i>=0?"theme-pos":"theme-neg"}'>${signedMoneyText(i)}</td>
+        <td><button onclick='searchThemeNews("${escapeHtml(r.name || theme.name || "")}")' style='padding:5px 8px;font-size:12px'>검색</button></td>
+      </tr>`;
+    }).join("")+`</tbody></table>
+    <div style='margin-top:10px'>${(theme.newsKeywords||theme.keywords||[]).map(k=>`<span class='pill'>${escapeHtml(k)}</span>`).join("")}</div>`;
+}
+
+function searchThemeNews(keyword){
+  showTab('searchTab', document.querySelector('.tabbtn'));
+  const q=document.getElementById("extraKeywords");
+  if(q) q.value=keyword;
+  clearResultsOnly();
 }
 
 async function fetchReportStockSuggestions(){
@@ -3303,6 +3457,190 @@ def export_report_snapshot(force=False):
         pass
     return data
 
+# ---------------- 테마 대시보드 ----------------
+THEME_SEEDS = [
+    {"key":"semiconductor","name":"반도체/HBM","keywords":["HBM","AI반도체","메모리","반도체장비"],"news":["반도체","HBM","AI반도체","SK하이닉스","삼성전자"],"stocks":["삼성전자","SK하이닉스","한미반도체","주성엔지니어링","이오테크닉스","테크윙","리노공업"]},
+    {"key":"power","name":"전력기기/전선","keywords":["변압기","전력망","전선","데이터센터"],"news":["전력기기","변압기","전선","데이터센터"],"stocks":["HD현대일렉트릭","LS ELECTRIC","효성중공업","일진전기","제룡전기","대한전선","가온전선"]},
+    {"key":"shipbuilding","name":"조선/LNG","keywords":["조선","LNG선","수주","해양플랜트"],"news":["조선","LNG선","수주","한화오션"],"stocks":["HD현대중공업","HD한국조선해양","한화오션","삼성중공업","HD현대미포","HJ중공업"]},
+    {"key":"cosmetics","name":"화장품/K뷰티","keywords":["K뷰티","ODM","미국수출","아마존"],"news":["화장품","K뷰티","코스맥스","한국콜마"],"stocks":["코스맥스","한국콜마","아모레퍼시픽","LG생활건강","APR","실리콘투","브이티"]},
+    {"key":"bio","name":"바이오/제약","keywords":["바이오","제약","CDMO","의료기기"],"news":["바이오","제약","CDMO","의료기기"],"stocks":["삼성바이오로직스","셀트리온","알테오젠","리가켐바이오","에이비엘바이오","HLB"]},
+    {"key":"battery","name":"이차전지","keywords":["배터리","양극재","리튬","전기차"],"news":["이차전지","배터리","양극재","리튬"],"stocks":["LG에너지솔루션","삼성SDI","에코프로비엠","포스코퓨처엠","엘앤에프","에코프로"]},
+    {"key":"auto","name":"자동차/부품","keywords":["완성차","부품","친환경차","북미"],"news":["자동차","현대차","기아","자동차부품"],"stocks":["현대차","기아","현대모비스","HL만도","성우하이텍","화신"]},
+    {"key":"defense","name":"방산","keywords":["방산","수출","폴란드","중동"],"news":["방산","한화에어로스페이스","현대로템","LIG넥스원"],"stocks":["한화에어로스페이스","현대로템","LIG넥스원","한국항공우주","한화시스템"]},
+    {"key":"nuclear","name":"원전/에너지","keywords":["원전","SMR","원전수출","전력"],"news":["원전","SMR","두산에너빌리티","한전기술"],"stocks":["두산에너빌리티","한전기술","한전KPS","우진","비에이치아이"]},
+    {"key":"food","name":"음식료/K푸드","keywords":["K푸드","라면","김","수출"],"news":["K푸드","라면","삼양식품","농심"],"stocks":["삼양식품","농심","오리온","CJ제일제당","빙그레"]},
+    {"key":"ai_software","name":"AI/소프트웨어","keywords":["AI","데이터센터","클라우드","LLM"],"news":["AI","소프트웨어","NAVER","카카오"],"stocks":["NAVER","카카오","더존비즈온","이스트소프트","솔트룩스"]},
+]
+
+THEME_STOCK_CODE_FALLBACK = {
+    "삼성전자":"005930","SK하이닉스":"000660","한미반도체":"042700","주성엔지니어링":"036930","이오테크닉스":"039030","테크윙":"089030","리노공업":"058470",
+    "HD현대일렉트릭":"267260","LS ELECTRIC":"010120","효성중공업":"298040","일진전기":"103590","제룡전기":"033100","대한전선":"001440","가온전선":"000500",
+    "HD현대중공업":"329180","HD한국조선해양":"009540","한화오션":"042660","삼성중공업":"010140","HD현대미포":"010620","HJ중공업":"097230",
+    "코스맥스":"192820","한국콜마":"161890","아모레퍼시픽":"090430","LG생활건강":"051900","APR":"278470","실리콘투":"257720","브이티":"018290",
+    "삼성바이오로직스":"207940","셀트리온":"068270","알테오젠":"196170","리가켐바이오":"141080","에이비엘바이오":"298380","HLB":"028300",
+    "LG에너지솔루션":"373220","삼성SDI":"006400","에코프로비엠":"247540","포스코퓨처엠":"003670","엘앤에프":"066970","에코프로":"086520",
+    "현대차":"005380","기아":"000270","현대모비스":"012330","HL만도":"204320","성우하이텍":"015750","화신":"010690",
+    "한화에어로스페이스":"012450","현대로템":"064350","LIG넥스원":"079550","한국항공우주":"047810","한화시스템":"272210",
+    "두산에너빌리티":"034020","한전기술":"052690","한전KPS":"051600","우진":"105840","비에이치아이":"083650",
+    "삼양식품":"003230","농심":"004370","오리온":"271560","CJ제일제당":"097950","빙그레":"005180",
+    "NAVER":"035420","카카오":"035720","더존비즈온":"012510","이스트소프트":"047560","솔트룩스":"304100",
+}
+
+def theme_date_range(start="", end=""):
+    today=datetime.now(KST).date()
+    end_d=iso_date(end) or today
+    start_d=iso_date(start) or (end_d - timedelta(days=10))
+    if start_d>end_d:
+        start_d,end_d=end_d,start_d
+    return start_d.strftime("%Y-%m-%d"), end_d.strftime("%Y-%m-%d")
+
+def stock_lookup_by_name():
+    lookup={}
+    for item in stock_master_items():
+        name=str(item.get("name") or "").strip()
+        code=normalize_stock_code(item.get("code"))
+        if name and code:
+            lookup[normalize_stock_name(name)]={"name":name,"code":code,"market":item.get("market") or ""}
+    return lookup
+
+def resolve_theme_stock(name, lookup):
+    key=normalize_stock_name(name)
+    if key in lookup:
+        return lookup[key]
+    for k,item in lookup.items():
+        if key and (key in k or k in key):
+            return item
+    fallback_code=THEME_STOCK_CODE_FALLBACK.get(name)
+    if fallback_code:
+        return {"name":name, "code":fallback_code, "market":""}
+    return {"name":name, "code":"", "market":""}
+
+def pykrx_stock_module():
+    try:
+        from pykrx import stock
+        return stock
+    except Exception:
+        return None
+
+def fdr_module():
+    try:
+        import FinanceDataReader as fdr
+        return fdr
+    except Exception:
+        return None
+
+def stock_theme_snapshot(code, start, end, pykrx_stock=None, fdr=None):
+    code=normalize_stock_code(code)
+    if not code:
+        return {"changePct":0, "amount":0, "foreignNetBuy":0, "institutionNetBuy":0, "provider":"none", "supplyProvider":"none"}
+    s8=start.replace("-","")
+    e8=end.replace("-","")
+    close_first=None
+    close_last=None
+    amount=0
+    provider=""
+    if pykrx_stock:
+        try:
+            df=pykrx_stock.get_market_ohlcv(s8, e8, code, adjusted=False)
+            if df is not None and not df.empty:
+                df=df.sort_index()
+                close_first=float(df.iloc[0].get("종가") or 0)
+                close_last=float(df.iloc[-1].get("종가") or 0)
+                if "거래대금" in df.columns:
+                    amount=int(float(df["거래대금"].fillna(0).sum()))
+                elif "거래량" in df.columns:
+                    amount=int(float((df["종가"].fillna(0)*df["거래량"].fillna(0)).sum()))
+                provider="pykrx"
+        except Exception:
+            pass
+    if (not close_first or not close_last) and fdr:
+        try:
+            df=fdr.DataReader(code, start, end)
+            if df is not None and not df.empty:
+                df=df.sort_index()
+                close_first=float(df.iloc[0].get("Close") or 0)
+                close_last=float(df.iloc[-1].get("Close") or 0)
+                amount=int(float((df["Close"].fillna(0)*df["Volume"].fillna(0)).sum()))
+                provider="FinanceDataReader"
+        except Exception:
+            pass
+    foreign=0
+    institution=0
+    supply_provider="none"
+    if pykrx_stock:
+        try:
+            tv=pykrx_stock.get_market_trading_value_by_date(s8, e8, code)
+            if tv is not None and not tv.empty:
+                if "외국인합계" in tv.columns:
+                    foreign=int(float(tv["외국인합계"].fillna(0).sum()))
+                elif "외국인" in tv.columns:
+                    foreign=int(float(tv["외국인"].fillna(0).sum()))
+                if "기관합계" in tv.columns:
+                    institution=int(float(tv["기관합계"].fillna(0).sum()))
+                elif "기관" in tv.columns:
+                    institution=int(float(tv["기관"].fillna(0).sum()))
+                supply_provider="pykrx"
+        except Exception:
+            pass
+    change=round((close_last-close_first)/close_first*100, 2) if close_first and close_last else 0
+    return {
+        "changePct":change,
+        "amount":amount,
+        "foreignNetBuy":foreign,
+        "institutionNetBuy":institution,
+        "provider":provider or "none",
+        "supplyProvider":supply_provider,
+    }
+
+def theme_dashboard_payload(start="", end=""):
+    start,end=theme_date_range(start, end)
+    lookup=stock_lookup_by_name()
+    pykrx_stock=pykrx_stock_module()
+    fdr=fdr_module()
+    themes=[]
+    providers=set()
+    supply_providers=set()
+    for seed in THEME_SEEDS:
+        stock_rows=[]
+        for raw_name in seed["stocks"]:
+            resolved=resolve_theme_stock(raw_name, lookup)
+            snap=stock_theme_snapshot(resolved.get("code"), start, end, pykrx_stock, fdr)
+            providers.add(snap.get("provider") or "none")
+            supply_providers.add(snap.get("supplyProvider") or "none")
+            stock_rows.append({
+                "name":resolved.get("name") or raw_name,
+                "code":resolved.get("code") or "",
+                "market":resolved.get("market") or "",
+                "changePct":snap["changePct"],
+                "amount":snap["amount"],
+                "foreignNetBuy":snap["foreignNetBuy"],
+                "institutionNetBuy":snap["institutionNetBuy"],
+            })
+        valid=[r for r in stock_rows if r.get("code")]
+        avg_change=round(sum(r["changePct"] for r in valid)/len(valid), 2) if valid else 0
+        amount=sum(int(r.get("amount") or 0) for r in valid)
+        foreign=sum(int(r.get("foreignNetBuy") or 0) for r in valid)
+        institution=sum(int(r.get("institutionNetBuy") or 0) for r in valid)
+        net=foreign+institution
+        score=round(max(0, avg_change)*12 + min(35, amount/100000000000) + max(0, net)/10000000000, 1)
+        stock_rows.sort(key=lambda r:(r.get("changePct") or 0, r.get("amount") or 0), reverse=True)
+        themes.append({
+            "key":seed["key"], "name":seed["name"],
+            "keywords":seed["keywords"], "newsKeywords":seed["news"],
+            "changePct":avg_change, "amount":amount,
+            "foreignNetBuy":foreign, "institutionNetBuy":institution, "netBuyTotal":net,
+            "score":score, "stocks":stock_rows,
+        })
+    themes.sort(key=lambda t:(t["score"], t["changePct"], t["amount"]), reverse=True)
+    return {
+        "ok":True,
+        "start":start, "end":end,
+        "generatedAt":datetime.now(KST).strftime("%Y-%m-%d %H:%M:%S"),
+        "provider":"/".join(sorted(p for p in providers if p and p!="none")) or "none",
+        "supplyProvider":"/".join(sorted(p for p in supply_providers if p and p!="none")) or "none",
+        "themes":themes,
+    }
+
 class Handler(BaseHTTPRequestHandler):
     def send_content(self,status,content,ctype="text/html; charset=utf-8"):
         if isinstance(content,str): content=content.encode("utf-8")
@@ -3350,6 +3688,16 @@ class Handler(BaseHTTPRequestHandler):
                 qs=parse_qs(urlparse(self.path).query)
                 force=qs.get("force",["0"])[0] in ("1","true","yes")
                 self.send_content(200, json.dumps(export_report_snapshot(force), ensure_ascii=False), "application/json; charset=utf-8")
+            except Exception as e:
+                log_error(traceback.format_exc())
+                self.send_content(500, json.dumps({"ok":False,"error":str(e)}, ensure_ascii=False), "application/json; charset=utf-8")
+        elif self.path.startswith("/api/themes"):
+            try:
+                from urllib.parse import urlparse, parse_qs
+                qs=parse_qs(urlparse(self.path).query)
+                start=qs.get("start",[""])[0].strip()
+                end=qs.get("end",[""])[0].strip()
+                self.send_content(200, json.dumps(theme_dashboard_payload(start, end), ensure_ascii=False), "application/json; charset=utf-8")
             except Exception as e:
                 log_error(traceback.format_exc())
                 self.send_content(500, json.dumps({"ok":False,"error":str(e)}, ensure_ascii=False), "application/json; charset=utf-8")
