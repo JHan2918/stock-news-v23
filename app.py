@@ -1563,9 +1563,11 @@ function renderResearchReportCard(r){
             </div>
           </div>
           <canvas id='${canvasId}'></canvas>
-          <div class='report-chart-title' style='margin:12px 0 8px'>외국인/기관 순매수 추이</div>
+          <div class='report-chart-head' style='margin-top:12px'>
+            <div class='report-chart-title'>외국인/기관 순매수 추이</div>
+          </div>
           <canvas id='${flowCanvasId}'></canvas>
-          <div id='${statusId}' class='report-chart-status'>상세 보기를 열면 주가와 목표가를 함께 불러옵니다.</div>
+          <div id='${statusId}' class='report-chart-status'>상세 보기를 열면 주가, 목표가, 외국인/기관 수급을 함께 불러옵니다.</div>
         </div>
         <h4>목표가 이유</h4>
         <div class='meta'>${escapeHtml(r.target_price_reason || "-")}</div>
@@ -1603,7 +1605,7 @@ async function loadReportPriceChart(detailId, period, btn){
     if(status) status.innerHTML="<span class='err'>종목코드가 없어 주가 그래프를 불러올 수 없습니다.</span>";
     return;
   }
-  if(status) status.textContent="주가와 목표가 데이터를 불러오는 중...";
+  if(status) status.textContent="주가, 목표가, 외국인/기관 수급 데이터를 불러오는 중...";
   try{
     const params=new URLSearchParams({stock_code:code, report_date:reportDate, report_id:el.dataset.reportId || "", period:period || "6m"});
     const res=await fetch(`/api/report-price-chart?${params.toString()}&ts=${Date.now()}`);
