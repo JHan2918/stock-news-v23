@@ -3518,15 +3518,27 @@ def stock_lookup_by_name():
             lookup[normalize_stock_name(name)]={"name":name,"code":code,"market":item.get("market") or ""}
     return lookup
 
-def resolve_theme_stock(name, lookup):
+def stock_lookup_by_code():
+    lookup={}
+    for item in stock_master_items():
+        code=normalize_stock_code(item.get("code"))
+        name=str(item.get("name") or "").strip()
+        if code and name:
+            lookup[code]={"name":name,"code":code,"market":item.get("market") or ""}
+    return lookup
+
+def resolve_theme_stock(name, name_lookup, code_lookup):
     key=normalize_stock_name(name)
-    if key in lookup:
-        return lookup[key]
-    for k,item in lookup.items():
+    if key in name_lookup:
+        return name_lookup[key]
+    for k,item in name_lookup.items():
         if key and (key in k or k in key):
             return item
     fallback_code=THEME_STOCK_CODE_FALLBACK.get(name)
     if fallback_code:
+        latest=code_lookup.get(fallback_code)
+        if latest:
+            return latest
         return {"name":name, "code":fallback_code, "market":""}
     return {"name":name, "code":"", "market":""}
 
@@ -3616,7 +3628,8 @@ def theme_dashboard_payload(start="", end=""):
         data=json.loads(json.dumps(cached["data"], ensure_ascii=False))
         data["cached"]=True
         return data
-    lookup=stock_lookup_by_name()
+    name_lookup=stock_lookup_by_name()
+    code_lookup=stock_lookup_by_code()
     pykrx_stock=pykrx_stock_module()
     fdr=fdr_module()
     themes=[]
@@ -3625,7 +3638,7 @@ def theme_dashboard_payload(start="", end=""):
     for seed in THEME_SEEDS:
         stock_rows=[]
         for raw_name in seed["stocks"]:
-            resolved=resolve_theme_stock(raw_name, lookup)
+            resolved=resolve_theme_stock(raw_name, name_lookup, code_lookup)
             snap=stock_theme_snapshot(resolved.get("code"), start, end, pykrx_stock, fdr)
             providers.add(snap.get("provider") or "none")
             supply_providers.add(snap.get("supplyProvider") or "none")
