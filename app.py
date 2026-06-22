@@ -3567,6 +3567,14 @@ def stock_lookup_by_code():
 
 def resolve_theme_stock(name, name_lookup, code_lookup):
     key=normalize_stock_name(name)
+    fallback_code=THEME_STOCK_CODE_FALLBACK.get(name)
+    if fallback_code:
+        latest=code_lookup.get(fallback_code)
+        if latest:
+            latest=dict(latest)
+            latest["name"]=THEME_STOCK_DISPLAY_NAME_OVERRIDE.get(fallback_code, latest.get("name"))
+            return latest
+        return {"name":THEME_STOCK_DISPLAY_NAME_OVERRIDE.get(fallback_code, name), "code":fallback_code, "market":""}
     if key in name_lookup:
         item=dict(name_lookup[key])
         item["name"]=THEME_STOCK_DISPLAY_NAME_OVERRIDE.get(item.get("code"), item.get("name"))
@@ -3576,14 +3584,6 @@ def resolve_theme_stock(name, name_lookup, code_lookup):
             item=dict(item)
             item["name"]=THEME_STOCK_DISPLAY_NAME_OVERRIDE.get(item.get("code"), item.get("name"))
             return item
-    fallback_code=THEME_STOCK_CODE_FALLBACK.get(name)
-    if fallback_code:
-        latest=code_lookup.get(fallback_code)
-        if latest:
-            latest=dict(latest)
-            latest["name"]=THEME_STOCK_DISPLAY_NAME_OVERRIDE.get(fallback_code, latest.get("name"))
-            return latest
-        return {"name":name, "code":fallback_code, "market":""}
     return {"name":name, "code":"", "market":""}
 
 def pykrx_stock_module():
@@ -3600,7 +3600,49 @@ def fdr_module():
     except Exception:
         return None
 
-def stock_theme_snapshot(code, start, end, pykrx_stock=None, fdr=None):
+def load_theme_flow_map(codes, start, end):
+    flow_map={}
+    codes=[normalize_stock_code(c) for c in codes if normalize_stock_code(c)]
+    if not codes:
+        return flow_map
+    try:
+        con=db_connect()
+        try:
+            placeholders=",".join("?" for _ in codes)
+            rows=db_rows(
+                con,
+                f"""
+                SELECT
+                  stock_code,
+                  SUM(COALESCE(foreign_net_volume, 0)) AS foreign_net_volume,
+                  SUM(COALESCE(institution_net_volume, 0)) AS institution_net_volume,
+                  SUM(COALESCE(foreign_net_amount, 0)) AS foreign_net_amount,
+                  SUM(COALESCE(institution_net_amount, 0)) AS institution_net_amount,
+                  COUNT(*) AS row_count
+                FROM theme_investor_flows
+                WHERE trade_date BETWEEN ? AND ?
+                  AND stock_code IN ({placeholders})
+                GROUP BY stock_code
+                """,
+                [start, end] + codes,
+            )
+        finally:
+            con.close()
+        for row in rows:
+            if int(row.get("row_count") or 0) > 0:
+                flow_map[normalize_stock_code(row.get("stock_code"))]={
+                    "foreignNetBuy":int(row.get("foreign_net_amount") or 0),
+                    "institutionNetBuy":int(row.get("institution_net_amount") or 0),
+                    "foreignNetVolume":int(row.get("foreign_net_volume") or 0),
+                    "institutionNetVolume":int(row.get("institution_net_volume") or 0),
+                    "supplyProvider":"db_naver_finance",
+                    "supplyAvailable":True,
+                }
+    except Exception:
+        pass
+    return flow_map
+
+def stock_theme_snapshot(code, start, end, pykrx_stock=None, fdr=None, flow_data=None):
     code=normalize_stock_code(code)
     if not code:
         return {"changePct":0, "amount":0, "foreignNetBuy":None, "institutionNetBuy":None, "foreignNetVolume":None, "institutionNetVolume":None, "provider":"none", "supplyProvider":"none", "supplyAvailable":False}
@@ -3640,7 +3682,13 @@ def stock_theme_snapshot(code, start, end, pykrx_stock=None, fdr=None):
     foreign_volume=None
     institution_volume=None
     supply_provider="none"
-    if pykrx_stock:
+    if flow_data and flow_data.get("supplyAvailable"):
+        foreign=flow_data.get("foreignNetBuy")
+        institution=flow_data.get("institutionNetBuy")
+        foreign_volume=flow_data.get("foreignNetVolume")
+        institution_volume=flow_data.get("institutionNetVolume")
+        supply_provider=flow_data.get("supplyProvider") or "db"
+    elif pykrx_stock:
         try:
             tv=pykrx_stock.get_market_trading_value_by_date(s8, e8, code)
             if tv is not None and not tv.empty:
@@ -3696,14 +3744,26 @@ def theme_dashboard_payload(start="", end=""):
     code_lookup=stock_lookup_by_code()
     pykrx_stock=pykrx_stock_module()
     fdr=fdr_module()
+    resolved_by_seed={}
+    flow_codes=[]
+    for seed in THEME_SEEDS:
+        resolved_rows=[]
+        for raw_name in seed["stocks"]:
+            resolved=resolve_theme_stock(raw_name, name_lookup, code_lookup)
+            resolved_rows.append((raw_name, resolved))
+            code=normalize_stock_code(resolved.get("code"))
+            if code:
+                flow_codes.append(code)
+        resolved_by_seed[seed["key"]]=resolved_rows
+    flow_map=load_theme_flow_map(sorted(set(flow_codes)), start, end)
     themes=[]
     providers=set()
     supply_providers=set()
     for seed in THEME_SEEDS:
         stock_rows=[]
-        for raw_name in seed["stocks"]:
-            resolved=resolve_theme_stock(raw_name, name_lookup, code_lookup)
-            snap=stock_theme_snapshot(resolved.get("code"), start, end, pykrx_stock, fdr)
+        for raw_name,resolved in resolved_by_seed.get(seed["key"], []):
+            code=normalize_stock_code(resolved.get("code"))
+            snap=stock_theme_snapshot(code, start, end, pykrx_stock, fdr, flow_map.get(code))
             providers.add(snap.get("provider") or "none")
             supply_providers.add(snap.get("supplyProvider") or "none")
             stock_rows.append({
