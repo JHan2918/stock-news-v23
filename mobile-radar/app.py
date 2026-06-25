@@ -517,6 +517,148 @@ def research_reports_payload(start="", end="", q="", limit=80):
     return {"ok": True, "reports": reports, "meta": {"start": start, "end": end, "q": q, "latestDate": latest, "count": len(reports)}}
 
 
+def source_report_date(report_date="", report_url="", local_file_path=""):
+    for value in (report_url, local_file_path):
+        text = str(value or "")
+        m = re.search(r"(20\d{2})[-_]?([01]\d)[-_]?([0-3]\d)", text)
+        if m:
+            try:
+                return datetime(int(m.group(1)), int(m.group(2)), int(m.group(3))).date()
+            except Exception:
+                pass
+    return iso_date(report_date)
+
+
+def chart_date_range(report_date="", period="6m"):
+    today = datetime.now(KST).date()
+    rd = iso_date(report_date) or today
+    if rd > today:
+        rd = today
+    period = (period or "6m").lower()
+    if period == "after":
+        start = rd
+    else:
+        days = {"1m": 31, "3m": 93, "6m": 186, "1y": 370}.get(period, 186)
+        start = today - timedelta(days=days)
+    return start.strftime("%Y-%m-%d"), today.strftime("%Y-%m-%d")
+
+
+def report_context_from_id(report_id):
+    if not report_id or not report_db_exists():
+        return {}
+    try:
+        rid = int(report_id)
+    except Exception:
+        return {}
+    con = db_connect()
+    row = con.execute(
+        "SELECT report_id,report_date,report_url,local_file_path,stock_name,stock_code FROM reports WHERE report_id=?",
+        (rid,),
+    ).fetchone()
+    con.close()
+    if not row:
+        return {}
+    d = source_report_date(row["report_date"], row["report_url"], row["local_file_path"])
+    return {
+        "reportDate": d.strftime("%Y-%m-%d") if d else (row["report_date"] or ""),
+        "stockCode": row["stock_code"] or "",
+        "stockName": row["stock_name"] or "",
+    }
+
+
+def target_price_series(stock_code, start, end):
+    code = normalize_stock_code(stock_code)
+    if not report_db_exists() or not code:
+        return []
+    start_d = iso_date(start)
+    end_d = iso_date(end)
+    con = db_connect()
+    rows = db_rows(
+        con,
+        """
+        SELECT report_id,report_date,report_url,local_file_path,stock_name,stock_code,securities_firm,title,target_price,current_price_at_report_date
+        FROM reports
+        WHERE stock_code=?
+          AND target_price IS NOT NULL
+          AND trim(cast(target_price AS text))!=''
+        ORDER BY report_date, report_id
+        """,
+        (code,),
+    )
+    con.close()
+    out = []
+    for r in rows:
+        d = source_report_date(r.get("report_date"), r.get("report_url"), r.get("local_file_path"))
+        if not d or (start_d and d < start_d) or (end_d and d > end_d):
+            continue
+        try:
+            target = int(float(str(r.get("target_price")).replace(",", "")))
+        except Exception:
+            continue
+        if target <= 0:
+            continue
+        out.append({
+            "date": d.strftime("%Y-%m-%d"),
+            "targetPrice": target,
+            "currentPrice": r.get("current_price_at_report_date"),
+            "firm": r.get("securities_firm") or "",
+            "title": r.get("title") or "",
+            "reportId": r.get("report_id"),
+        })
+    return out
+
+
+def report_price_chart_payload(stock_code="", report_date="", period="6m", report_id=""):
+    ctx = report_context_from_id(report_id)
+    code = normalize_stock_code(ctx.get("stockCode") or stock_code)
+    report_date = ctx.get("reportDate") or report_date
+    start, end = chart_date_range(report_date, period)
+    stock_name = ctx.get("stockName") or ""
+    close_rows, flow_rows = [], []
+    if report_db_exists() and code:
+        con = db_connect()
+        try:
+            row = con.execute(
+                "SELECT stock_name FROM reports WHERE stock_code=? AND stock_name IS NOT NULL AND trim(stock_name)!='' ORDER BY report_date DESC LIMIT 1",
+                (code,),
+            ).fetchone()
+            if row and row["stock_name"]:
+                stock_name = row["stock_name"]
+            rows = db_rows(
+                con,
+                """
+                SELECT trade_date, close_price, volume, foreign_net_volume, institution_net_volume,
+                       foreign_net_amount, institution_net_amount
+                FROM theme_investor_flows
+                WHERE stock_code=? AND trade_date BETWEEN ? AND ?
+                ORDER BY trade_date
+                """,
+                (code, start, end),
+            )
+            for r in rows:
+                close_rows.append({"date": r["trade_date"], "close": r["close_price"]})
+                flow_rows.append({
+                    "date": r["trade_date"], "close": r["close_price"], "volume": r["volume"],
+                    "foreignNetVolume": r["foreign_net_volume"], "institutionNetVolume": r["institution_net_volume"],
+                    "foreignNetAmount": r["foreign_net_amount"], "institutionNetAmount": r["institution_net_amount"],
+                })
+        finally:
+            con.close()
+    return {
+        "ok": True,
+        "stockCode": code,
+        "stockName": stock_name or code,
+        "reportDate": (iso_date(report_date).strftime("%Y-%m-%d") if iso_date(report_date) else ""),
+        "period": period,
+        "start": start,
+        "end": end,
+        "closeSeries": close_rows,
+        "targetSeries": target_price_series(code, start, end),
+        "flowSeries": flow_rows,
+        "provider": "theme_investor_flows",
+    }
+
+
 def industry_payload_from_db(month=""):
     if not report_db_exists():
         return {"ok": False, "error": "공유 DB를 찾지 못했습니다."}
@@ -784,7 +926,7 @@ h1{font-size:24px;margin:0 0 4px}.status{font-size:12px;color:var(--muted);margi
 .macro-chart-grid{display:grid;gap:10px}.macro-chart{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:10px}.macro-chart-head{display:flex;justify-content:space-between;align-items:baseline;gap:8px}.macro-chart-name{font-weight:900}.macro-chart-value{color:#d7e7ff;font-weight:900}.macro-pos{color:#8aff8a}.macro-neg{color:#ff8585}.mini-svg{width:100%;height:108px;margin-top:8px;display:block}.mini-svg .axis{stroke:#263544;stroke-width:1}.mini-svg .line{fill:none;stroke:#7db1ff;stroke-width:3}.mini-svg .area{fill:#1b2d43;opacity:.55}
 .panel{display:none;background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:12px;margin:12px 0}.page-mode #homeGrid{display:none}.page-mode #detailPanel{display:block}.page-mode .refresh{display:none}.panel-head{display:flex;align-items:center;gap:10px;margin-bottom:10px}.back{border:1px solid #4f77aa;background:#26384d;color:#d7e7ff;border-radius:10px;width:38px;height:36px;font-size:18px}.panel h2{font-size:18px;margin:0}.list{display:grid;gap:9px}
 .row{display:grid;grid-template-columns:34px 1fr auto;gap:8px;align-items:center;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:10px}.rank{font-size:18px;font-weight:900;color:var(--accent)}.name{font-weight:900;font-size:16px}.meta{font-size:12px;color:var(--muted);line-height:1.45;margin-top:3px}.score{text-align:right;color:var(--good);font-weight:900;font-size:14px}.chip{display:inline-block;border:1px solid #4f77aa;border-radius:999px;padding:2px 7px;margin:3px 3px 0 0;color:#d7e7ff;background:#26384d;font-size:11px}.metric-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px}.metric{background:#202832;border:1px solid #344151;border-radius:12px;padding:10px}.metric b{display:block;color:#d7e7ff;font-size:18px}.metric span{display:block;color:#9fb0bf;font-size:11px;margin-top:3px}.section-note{background:#0f1720;border:1px solid #263544;border-radius:12px;padding:10px;color:#c7d4e0;font-size:12px;line-height:1.55;margin-bottom:10px}.mini-bars{display:grid;gap:7px;margin-top:8px}.mini-bar{display:grid;grid-template-columns:76px 1fr auto;gap:7px;align-items:center;font-size:12px}.bar-track{height:8px;background:#344151;border-radius:999px;overflow:hidden}.bar-fill{display:block;height:100%;background:#7db1ff}.pos{color:#8aff8a}.neg{color:#ff8585}
-.report-filter{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px}.report-filter label{display:grid;gap:4px;color:#9fb0bf;font-size:11px}.report-filter input{width:100%;height:38px;border-radius:10px;border:1px solid #344151;background:#0d131a;color:#f2f7ff;padding:0 10px;font-size:13px}.report-filter .full{grid-column:span 2;position:relative}.report-filter button{grid-column:span 2;height:40px;border:0;border-radius:11px;background:#2f81f7;color:white;font-weight:900}.suggestions{position:absolute;left:0;right:0;top:58px;z-index:20;background:#0d131a;border:1px solid #4f77aa;border-radius:12px;overflow:hidden;box-shadow:0 12px 28px rgba(0,0,0,.35)}.suggestions.hidden{display:none}.suggestion{display:flex;justify-content:space-between;gap:8px;padding:10px;border-bottom:1px solid #263544}.suggestion b{color:#d7e7ff}.suggestion span{color:#9dccff;font-size:12px}.empty{border:1px dashed #3d4a58;border-radius:12px;padding:18px;color:var(--muted);line-height:1.6}.refresh{width:100%;height:44px;border-radius:12px;border:0;background:linear-gradient(135deg,#42c7d8,#6bb8ff);color:#07131a;font-weight:900;margin-top:10px;box-shadow:0 8px 20px rgba(66,199,216,.18)}
+.report-filter{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px}.report-filter label{display:grid;gap:4px;color:#9fb0bf;font-size:11px}.report-filter input{width:100%;height:38px;border-radius:10px;border:1px solid #344151;background:#0d131a;color:#f2f7ff;padding:0 10px;font-size:13px}.report-filter .full{grid-column:span 2;position:relative}.report-filter button{grid-column:span 2;height:40px;border:0;border-radius:11px;background:#2f81f7;color:white;font-weight:900}.suggestions{position:absolute;left:0;right:0;top:58px;z-index:20;background:#0d131a;border:1px solid #4f77aa;border-radius:12px;overflow:hidden;box-shadow:0 12px 28px rgba(0,0,0,.35)}.suggestions.hidden{display:none}.suggestion{display:flex;justify-content:space-between;gap:8px;padding:10px;border-bottom:1px solid #263544}.suggestion b{color:#d7e7ff}.suggestion span{color:#9dccff;font-size:12px}.report-actions{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}.report-actions a,.report-actions button{border:1px solid #4f77aa;background:#26384d;color:#d7e7ff;text-decoration:none;border-radius:9px;padding:6px 8px;font-size:12px}.report-actions button.primary{background:#2f81f7;color:white}.detail-card{grid-column:1/-1;background:#0d131a;border:1px solid #344151;border-radius:12px;padding:10px;margin-top:8px}.detail-card.hidden,.hidden{display:none}.detail-chart{width:100%;height:150px;display:block;background:#0b1118;border:1px solid #263544;border-radius:10px;margin:8px 0}.empty{border:1px dashed #3d4a58;border-radius:12px;padding:18px;color:var(--muted);line-height:1.6}.refresh{width:100%;height:44px;border-radius:12px;border:0;background:linear-gradient(135deg,#42c7d8,#6bb8ff);color:#07131a;font-weight:900;margin-top:10px;box-shadow:0 8px 20px rgba(66,199,216,.18)}
 .modal{position:fixed;inset:0;background:rgba(0,0,0,.65);z-index:99;display:flex;align-items:flex-end}.modal.hidden{display:none}.sheet{width:100%;max-height:84vh;overflow:auto;background:#111820;border:1px solid #344151;border-radius:18px 18px 0 0;padding:16px}.sheet-head{display:flex;justify-content:space-between;gap:12px;border-bottom:1px solid #344151;padding-bottom:10px;margin-bottom:10px}.close{border:1px solid #4f77aa;background:#26384d;color:#d7e7ff;border-radius:9px;padding:6px 10px}.news{border-bottom:1px solid #263544;padding:10px 0}.news a{color:#d7e7ff;text-decoration:none;font-weight:800}.news a:hover{text-decoration:underline}
 </style>
 </head>
@@ -826,12 +968,16 @@ function goHome(){document.body.classList.remove("page-mode");window.scrollTo({t
 async function showDetail(type){const title={stock:"오늘의 종목 HOT 이슈",macro:"시장·거시 HOT 이슈",macroChart:"매크로 그래프",report:"증권사 보고서",industry:"산업수출데이터",theme:"테마",watch:"관심종목"}[type]||"상세";document.getElementById("detailTitle").textContent=title;document.body.classList.add("page-mode");window.scrollTo({top:0,behavior:"smooth"});if(type==="stock")renderRows(DATA.stockHot||[],"stock");else if(type==="macro")renderRows(DATA.macroHot||[],"macro");else if(type==="macroChart")renderMacroCharts();else if(type==="report")await loadReportPage();else if(type==="industry")await loadIndustryPage();else if(type==="theme")await loadThemePage();else renderStaticRows(DATA.cards?.[type]||[],type)}
 function renderRows(rows,type){const el=document.getElementById("detailList");if(!rows.length){el.innerHTML="<div class='empty'>표시할 데이터가 없습니다.</div>";return}el.innerHTML=rows.slice(0,15).map((r,i)=>{const name=type==="stock"?r.stockName:r.keyword;const sub=type==="stock"?r.stockCode:(r.sources||[]).slice(0,2).join(", ");const chips=(r.keywords||[]).slice(0,4).map(k=>`<span class='chip'>${esc(k)}</span>`).join("");return `<div class='row' onclick='openModal("${type}",${i})'><div class='rank'>${i+1}</div><div><div class='name'>${esc(name)}</div><div class='meta'>${esc(sub)} / 뉴스 ${Number(r.newsCount||0)}건 / 점수 ${Number(r.score||0).toFixed(0)}<br>${chips}<br>${esc(r.title||"")}</div></div><div class='score'>뉴스 ${Number(r.newsCount||0)}건<br><span class='meta'>${Number(r.score||0).toFixed(0)}</span></div></div>`}).join("")}
 function renderReportRows(rows){const el=document.getElementById("detailList");if(!rows.length){el.innerHTML="<div class='empty'>보고서 데이터가 없습니다.</div>";return}el.innerHTML=rows.map((r,i)=>`<div class='row'><div class='rank'>${i+1}</div><div><div class='name'>${esc(r.stockName||"-")}</div><div class='meta'>${esc(r.firm||"")} / ${esc(r.opinion||"")} / 목표가 ${esc(r.targetPrice||"-")}<br>${esc(r.title||"")}</div></div><div class='score'>보고서</div></div>`).join("")}
-async function loadReportPage(){const el=document.getElementById("detailList");const today=new Date().toISOString().slice(0,10);el.innerHTML=`<div class='section-note'><b>2026년 1월 1일 이후</b> 수집된 증권사 보고서 DB입니다.</div><div class='report-filter'><label>시작일<input id='reportStart' type='date' value='2026-01-01'></label><label>종료일<input id='reportEnd' type='date' value='${today}'></label><label class='full'>종목명·종목코드<input id='reportQuery' type='text' placeholder='삼, 삼성, 005930' autocomplete='off'><input id='reportCode' type='hidden'><div id='reportSuggest' class='suggestions hidden'></div></label><button onclick='searchReports()'>보고서 보기</button></div><div id='reportResult'><div class='empty'>증권사 보고서 DB를 불러오는 중...</div></div>`;bindReportSuggest();await searchReports()}
-function reportParams(){const s=document.getElementById("reportStart")?.value||"2026-01-01";const e=document.getElementById("reportEnd")?.value||"";const code=document.getElementById("reportCode")?.value||"";const q=code||document.getElementById("reportQuery")?.value.trim()||"";const p=new URLSearchParams({start:s,end:e,limit:"80",ts:String(Date.now())});if(q)p.set("q",q);return p}
-async function searchReports(){const box=document.getElementById("reportResult")||document.getElementById("detailList");box.innerHTML="<div class='empty'>증권사 보고서를 불러오는 중...</div>";try{const r=await fetch(`/api/research-reports?${reportParams().toString()}`);const d=await r.json();if(!d.ok)throw new Error(d.error||"보고서 로드 실패");renderMobileReports(d)}catch(e){box.innerHTML=`<div class='empty'>보고서 오류: ${esc(e.message)}</div>`}}
+async function loadReportPage(){const el=document.getElementById("detailList");el.innerHTML=`<div class='section-note'><b>검색 범위: 2026년 1월 1일 이후</b><br>기본 화면은 서버 프로그램처럼 최신 보고서일 하루치만 보여줍니다.</div><div class='report-filter'><label>시작일<input id='reportStart' type='date' placeholder='2026-01-01'></label><label>종료일<input id='reportEnd' type='date'></label><label class='full'>종목명·종목코드<input id='reportQuery' type='text' placeholder='삼, 삼성, 005930' autocomplete='off'><input id='reportCode' type='hidden'><div id='reportSuggest' class='suggestions hidden'></div></label><button onclick='searchReports(true)'>보고서 보기</button></div><div id='reportResult'><div class='empty'>증권사 보고서 DB를 불러오는 중...</div></div>`;bindReportSuggest();await searchReports(false)}
+function reportParams(useFilter=true){const p=new URLSearchParams({limit:"80",ts:String(Date.now())});if(useFilter){const s=document.getElementById("reportStart")?.value||"";const e=document.getElementById("reportEnd")?.value||"";const code=document.getElementById("reportCode")?.value||"";const q=code||document.getElementById("reportQuery")?.value.trim()||"";if(s)p.set("start",s);if(e)p.set("end",e);if(q)p.set("q",q)}return p}
+async function searchReports(useFilter=true){const box=document.getElementById("reportResult")||document.getElementById("detailList");box.innerHTML="<div class='empty'>증권사 보고서를 불러오는 중...</div>";try{const r=await fetch(`/api/research-reports?${reportParams(useFilter).toString()}`);const d=await r.json();if(!d.ok)throw new Error(d.error||"보고서 로드 실패");renderMobileReports(d)}catch(e){box.innerHTML=`<div class='empty'>보고서 오류: ${esc(e.message)}</div>`}}
 function bindReportSuggest(){const input=document.getElementById("reportQuery");const code=document.getElementById("reportCode");const box=document.getElementById("reportSuggest");if(!input||!box)return;let timer=null;input.addEventListener("input",()=>{code.value="";clearTimeout(timer);const q=input.value.trim();if(!q){box.classList.add("hidden");box.innerHTML="";return}timer=setTimeout(async()=>{try{const r=await fetch(`/api/stocks?q=${encodeURIComponent(q)}&limit=10&ts=${Date.now()}`);const d=await r.json();const items=d.items||[];if(!items.length){box.classList.add("hidden");return}box.innerHTML=items.map(it=>`<div class='suggestion' onclick='pickReportStock("${esc(it.name)}","${esc(it.code)}")'><b>${esc(it.name)}</b><span>${esc(it.code)}</span></div>`).join("");box.classList.remove("hidden")}catch(e){box.classList.add("hidden")}},160)});document.addEventListener("click",ev=>{if(!box.contains(ev.target)&&ev.target!==input)box.classList.add("hidden")},{once:false})}
-function pickReportStock(name,code){document.getElementById("reportQuery").value=name;document.getElementById("reportCode").value=code;document.getElementById("reportSuggest").classList.add("hidden");searchReports()}
-function renderMobileReports(d){const box=document.getElementById("reportResult")||document.getElementById("detailList");const rows=d.reports||[];const meta=d.meta||{};const stocks=new Set(rows.map(r=>r.stock_name).filter(Boolean));const targets=rows.filter(r=>r.target_price);let html=`<div class='section-note'>${esc(meta.start||"-")} ~ ${esc(meta.end||"-")} / 증권사 보고서 ${rows.length}건 / 종목 ${stocks.size}개</div><div class='metric-grid'><div class='metric'><b>${rows.length}건</b><span>보고서</span></div><div class='metric'><b>${targets.length}건</b><span>목표가 포함</span></div></div>`;if(!rows.length){box.innerHTML=html+"<div class='empty'>조건에 맞는 보고서가 없습니다.</div>";return}html+=rows.map((r,i)=>{const kws=(r.keywords||[]).slice(0,4).map(k=>`<span class='chip'>${esc(k.keyword)}</span>`).join("");const reason=(r.reasons||[])[0]?.reason_text||r.target_price_reason||r.summary||"";return `<div class='row'><div class='rank'>${i+1}</div><div><div class='name'>${esc(r.stock_name||"-")}</div><div class='meta'>${esc(r.report_date)} / ${esc(r.securities_firm||"")} / ${esc(r.investment_opinion||"")}<br>목표가 ${r.target_price?num(r.target_price)+"원":"-"} / 현재가 ${r.current_price_at_report_date?num(r.current_price_at_report_date)+"원":"-"}<br>${esc(r.title||"")}<br>${kws}<br>${esc(reason).slice(0,120)}</div></div><div class='score'>${r.upside_potential?Number(r.upside_potential).toFixed(1)+"%":"-"}</div></div>`}).join("");box.innerHTML=html}
+function pickReportStock(name,code){document.getElementById("reportQuery").value=name;document.getElementById("reportCode").value=code;document.getElementById("reportSuggest").classList.add("hidden");searchReports(true)}
+function renderMobileReports(d){const box=document.getElementById("reportResult")||document.getElementById("detailList");const rows=d.reports||[];const meta=d.meta||{};const stocks=new Set(rows.map(r=>r.stock_name).filter(Boolean));const targets=rows.filter(r=>r.target_price);let html=`<div class='section-note'>${esc(meta.start||"-")} ~ ${esc(meta.end||"-")} / 증권사 보고서 ${rows.length}건 / 종목 ${stocks.size}개</div><div class='metric-grid'><div class='metric'><b>${rows.length}건</b><span>보고서</span></div><div class='metric'><b>${targets.length}건</b><span>목표가 포함</span></div></div>`;if(!rows.length){box.innerHTML=html+"<div class='empty'>조건에 맞는 보고서가 없습니다.</div>";return}html+=rows.map((r,i)=>{const kws=(r.keywords||[]).slice(0,4).map(k=>`<span class='chip'>${esc(k.keyword)}</span>`).join("");const reason=(r.reasons||[])[0]?.reason_text||r.target_price_reason||r.summary||"";const url=r.report_url||"";const news=`https://www.google.com/search?tbm=nws&q=${encodeURIComponent((r.stock_name||"")+" "+(r.title||""))}`;return `<div class='row report-row' id='reportRow${r.report_id}'><div class='rank'>${i+1}</div><div><div class='name'>${esc(r.stock_name||"-")}</div><div class='meta'>${esc(r.report_date)} / ${esc(r.securities_firm||"")} / ${esc(r.investment_opinion||"")}<br>목표가 ${r.target_price?num(r.target_price)+"원":"-"} / 현재가 ${r.current_price_at_report_date?num(r.current_price_at_report_date)+"원":"-"}<br>${esc(r.title||"")}<br>${kws}<br>${esc(reason).slice(0,120)}</div><div class='report-actions'>${url?`<a href='${esc(url)}' target='_blank' rel='noreferrer'>원문열기</a>`:""}<button class='primary' onclick='toggleReportDetail(${r.report_id},"${esc(r.stock_code||"")}","${esc(r.report_date||"")}")'>상세보기</button><a href='${news}' target='_blank' rel='noreferrer'>뉴스검색</a></div><div id='reportDetail${r.report_id}' class='detail-card hidden'></div></div><div class='score'>${r.upside_potential?Number(r.upside_potential).toFixed(1)+"%":"-"}</div></div>`}).join("");box.innerHTML=html}
+async function toggleReportDetail(reportId,code,reportDate){const box=document.getElementById(`reportDetail${reportId}`);if(!box)return;if(!box.classList.contains("hidden")){box.classList.add("hidden");return}box.classList.remove("hidden");box.innerHTML="<div class='empty'>상세 데이터를 불러오는 중...</div>";try{const p=new URLSearchParams({report_id:String(reportId),stock_code:code||"",report_date:reportDate||"",period:"6m",ts:String(Date.now())});const r=await fetch(`/api/report-price-chart?${p.toString()}`);const d=await r.json();if(!d.ok)throw new Error(d.error||"상세 데이터 로드 실패");box.innerHTML=renderReportDetail(d)}catch(e){box.innerHTML=`<div class='empty'>상세보기 오류: ${esc(e.message)}</div>`}}
+function renderReportDetail(d){const close=d.closeSeries||[];const targets=d.targetSeries||[];const flows=d.flowSeries||[];return `<div class='section-note'><b>${esc(d.stockName||d.stockCode)}</b> / ${esc(d.start)} ~ ${esc(d.end)}<br>종가 ${close.length}일 / 목표가 ${targets.length}건 / 수급 ${flows.length}일</div><div class='meta'>종가 vs 목표가 추이</div>${priceTargetSvg(close,targets)}<div class='meta'>외국인/기관 순매수 추이</div>${flowSvg(flows)}`}
+function priceTargetSvg(close,targets){if(!close.length&&!targets.length)return "<div class='empty'>종가·목표가 데이터가 없습니다.</div>";const w=320,h=150,p=18;const vals=[...close.map(x=>Number(x.close)),...targets.map(x=>Number(x.targetPrice))].filter(Boolean);const min=Math.min(...vals),max=Math.max(...vals),span=max-min||1;const dates=close.map(x=>x.date);const xOf=(idx)=>dates.length>1?p+idx*(w-p*2)/(dates.length-1):w/2;const yOf=v=>p+(max-Number(v))/span*(h-p*2);const pts=close.map((d,i)=>`${xOf(i)},${yOf(d.close)}`).join(" ");const dots=targets.map(t=>{let i=dates.findIndex(d=>d>=t.date);if(i<0)i=Math.max(0,dates.length-1);return `<circle cx='${xOf(i)}' cy='${yOf(t.targetPrice)}' r='3.5' fill='#ff8585'></circle>`}).join("");return `<svg class='detail-chart' viewBox='0 0 ${w} ${h}' preserveAspectRatio='none'><line x1='${p}' y1='${h-p}' x2='${w-p}' y2='${h-p}' stroke='#263544'></line><polyline points='${pts}' fill='none' stroke='#7db1ff' stroke-width='2.5'></polyline>${dots}</svg>`}
+function flowSvg(flows){if(!flows.length)return "<div class='empty'>외국인/기관 수급 데이터가 없습니다.</div>";const w=320,h=150,p=18;let f=0,i=0;const acc=flows.map(r=>{f+=Number(r.foreignNetAmount||0);i+=Number(r.institutionNetAmount||0);return {date:r.date,f,i}});const vals=acc.flatMap(x=>[x.f,x.i]);const max=Math.max(...vals.map(v=>Math.abs(v)),1);const y=v=>h/2-(v/max)*(h/2-p);const xOf=idx=>acc.length>1?p+idx*(w-p*2)/(acc.length-1):w/2;const fp=acc.map((r,idx)=>`${xOf(idx)},${y(r.f)}`).join(" ");const ip=acc.map((r,idx)=>`${xOf(idx)},${y(r.i)}`).join(" ");return `<svg class='detail-chart' viewBox='0 0 ${w} ${h}' preserveAspectRatio='none'><line x1='${p}' y1='${h/2}' x2='${w-p}' y2='${h/2}' stroke='#344151'></line><polyline points='${fp}' fill='none' stroke='#7db1ff' stroke-width='2.5'></polyline><polyline points='${ip}' fill='none' stroke='#ff8585' stroke-width='2.5'></polyline></svg><div class='meta'>파랑: 외국인 누적 / 빨강: 기관 누적</div>`}
 async function loadIndustryPage(){const el=document.getElementById("detailList");el.innerHTML="<div class='empty'>???????? ???? ?...</div>";try{const r=await fetch(`/api/export-report?ts=${Date.now()}`);const d=await r.json();if(!d.ok)throw new Error(d.error||"??????? ?? ??");renderMobileIndustry(d)}catch(e){el.innerHTML=`<div class='empty'>??????? ??: ${esc(e.message)}</div>`}}
 function renderMobileIndustry(d){const el=document.getElementById("detailList");const m=d.metrics||{};const items=d.items||[];const max=Math.max(...items.map(x=>Number(x.latestAmount||0)),1);let html=`<div class='section-note'><b>${esc(d.reportMonth||"-")}</b> ${esc(d.headline||"")}</div><div class='metric-grid'><div class='metric'><b>${esc(m.exportAmount||"-")}</b><span>?? ${esc(m.exportYoY||"")}</span></div><div class='metric'><b>${esc(m.importAmount||"-")}</b><span>?? ${esc(m.importYoY||"")}</span></div><div class='metric'><b>${esc(m.balance||"-")}</b><span>????</span></div><div class='metric'><b>${items.length}?</b><span>??</span></div></div>`;html+=`<div class='section-note'>??? ?? ??</div><div class='mini-bars'>`+items.slice().sort((a,b)=>Number(b.latestAmount||0)-Number(a.latestAmount||0)).slice(0,10).map(it=>`<div class='mini-bar'><span>${esc(it.name)}</span><div class='bar-track'><span class='bar-fill' style='width:${Math.max(4,Number(it.latestAmount||0)/max*100)}%'></span></div><b>${num(it.latestAmount)}??$</b></div>`).join("")+`</div>`;html+=items.slice().sort((a,b)=>Number(b.latest||0)-Number(a.latest||0)).slice(0,12).map((it,i)=>`<div class='row'><div class='rank'>${i+1}</div><div><div class='name'>${esc(it.name)}</div><div class='meta'>?? ${num(it.latestAmount)}??$ / 3?? ?? ${pct(it.avg3)}<br>${esc(it.comment||"")}<br>${(it.newsKeywords||[]).slice(0,4).map(k=>`<span class='chip'>${esc(k)}</span>`).join("")}</div></div><div class='score ${Number(it.latest)>=0?"pos":"neg"}'>${pct(it.latest)}</div></div>`).join("");el.innerHTML=html}
 async function loadThemePage(){const el=document.getElementById("detailList");el.innerHTML="<div class='empty'>?? ???? ???? ?...</div>";try{const r=await fetch(`/api/themes?ts=${Date.now()}`);const d=await r.json();if(!d.ok)throw new Error(d.error||"?? ?? ??");renderMobileThemes(d)}catch(e){el.innerHTML=`<div class='empty'>?? ??: ${esc(e.message)}</div>`}}
@@ -872,6 +1018,13 @@ class Handler(BaseHTTPRequestHandler):
                 q = qs.get("q", [""])[0].strip()
                 limit = int(qs.get("limit", ["10"])[0] or 10)
                 self.send(200, json.dumps(stock_suggestions_payload(q, limit), ensure_ascii=False), "application/json; charset=utf-8")
+            elif parsed.path == "/api/report-price-chart":
+                qs = parse_qs(parsed.query)
+                stock_code = qs.get("stock_code", [""])[0].strip()
+                report_date = qs.get("report_date", [""])[0].strip()
+                report_id = qs.get("report_id", [""])[0].strip()
+                period = qs.get("period", ["6m"])[0].strip()
+                self.send(200, json.dumps(report_price_chart_payload(stock_code, report_date, period, report_id), ensure_ascii=False), "application/json; charset=utf-8")
             elif parsed.path == "/api/export-report":
                 qs = parse_qs(parsed.query)
                 month = qs.get("month", [""])[0].strip()
