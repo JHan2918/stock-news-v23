@@ -306,6 +306,53 @@ def build_macro_hot(items):
     return rows[:20]
 
 
+def yahoo_chart(symbol, days=30):
+    now = int(time.time())
+    start = now - days * 86400
+    url = (
+        "https://query1.finance.yahoo.com/v8/finance/chart/"
+        + quote_plus(symbol)
+        + f"?period1={start}&period2={now}&interval=1d"
+    )
+    data = json.loads(http_get(url, timeout=10).decode("utf-8", errors="replace"))
+    result = data.get("chart", {}).get("result") or []
+    if not result:
+        return []
+    r = result[0]
+    ts = r.get("timestamp") or []
+    quote = (r.get("indicators", {}).get("quote") or [{}])[0]
+    close = quote.get("close") or []
+    out = []
+    for t, c in zip(ts, close):
+        if c is None:
+            continue
+        dt = datetime.fromtimestamp(t, KST)
+        out.append({"date": dt.strftime("%m/%d"), "value": round(float(c), 4)})
+    return out[-days:]
+
+
+def macro_snapshot():
+    symbols = [
+        {"key": "usdkrw", "name": "원/달러", "symbol": "KRW=X", "unit": "원"},
+        {"key": "nasdaq", "name": "나스닥", "symbol": "^IXIC", "unit": ""},
+        {"key": "us10y", "name": "미국 10년물", "symbol": "^TNX", "unit": "%"},
+        {"key": "wti", "name": "WTI 유가", "symbol": "CL=F", "unit": "$"},
+        {"key": "gold", "name": "금", "symbol": "GC=F", "unit": "$"},
+    ]
+    items = []
+    for s in symbols:
+        series = []
+        try:
+            series = yahoo_chart(s["symbol"], 30)
+        except Exception:
+            series = []
+        latest = series[-1]["value"] if series else None
+        prev = series[-2]["value"] if len(series) >= 2 else None
+        pct = None if latest is None or prev in (None, 0) else round((latest - prev) / prev * 100, 2)
+        items.append({**s, "latest": latest, "pct": pct, "series": series})
+    return items
+
+
 def report_summary():
     db = extracted_report_db_path()
     if not db or not os.path.exists(db):
@@ -392,6 +439,7 @@ def hot_payload(force=False):
         "sourceNewsCount": len(items),
         "stockHot": build_stock_hot(items),
         "macroHot": build_macro_hot(items),
+        "macroCharts": macro_snapshot(),
         "reports": report_summary(),
         "cards": rotating_static_cards(),
         "errors": errors,
@@ -413,7 +461,7 @@ HTML = r"""<!doctype html>
 *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,BlinkMacSystemFont,"Malgun Gothic",sans-serif}
 .app{max-width:760px;margin:0 auto;padding:14px 12px 90px}.top{position:sticky;top:0;z-index:10;background:linear-gradient(#0d131a 80%,rgba(13,19,26,0));padding:10px 0 12px}
 h1{font-size:24px;margin:0 0 4px}.status{font-size:12px;color:var(--muted);margin-top:8px}
-.home-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:14px 0}.home-card{min-height:158px;background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:12px;overflow:hidden}.home-card.big{grid-column:span 2}.home-card h2{font-size:16px;margin:0 0 8px}.home-main{font-size:21px;font-weight:900;color:#d7e7ff;margin-bottom:8px}.ticker{height:78px;overflow:hidden}.ticker-track{display:grid;gap:5px;animation:roll 12s linear infinite}.ticker-line{display:grid;grid-template-columns:22px 1fr auto;gap:6px;align-items:center;color:#c7d4e0;font-size:13px}.ticker-rank{color:var(--accent);font-weight:900}.ticker-val{color:var(--good);font-weight:800;font-size:12px}@keyframes roll{0%,18%{transform:translateY(0)}25%,43%{transform:translateY(-25px)}50%,68%{transform:translateY(-50px)}75%,93%{transform:translateY(-75px)}100%{transform:translateY(0)}}.hint{font-size:11px;color:var(--muted);margin-top:8px}
+.home-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:14px 0}.home-card{min-height:132px;background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:12px;overflow:hidden}.home-card.wide{grid-column:span 2}.home-card.action{min-height:84px;display:flex;flex-direction:column;justify-content:center}.home-card h2{font-size:15px;margin:0 0 7px}.home-main{font-size:17px;font-weight:900;color:#d7e7ff;margin-bottom:7px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.ticker{height:47px;overflow:hidden}.ticker-track{display:grid;gap:5px;animation:roll 10s linear infinite}.ticker-line{display:grid;grid-template-columns:18px 1fr auto;gap:5px;align-items:center;color:#c7d4e0;font-size:12px;min-height:21px}.ticker-rank{color:var(--accent);font-weight:900}.ticker-val{color:var(--good);font-weight:800;font-size:11px;white-space:nowrap}@keyframes roll{0%,20%{transform:translateY(0)}28%,48%{transform:translateY(-26px)}56%,76%{transform:translateY(-52px)}84%,96%{transform:translateY(-78px)}100%{transform:translateY(0)}}.hint{font-size:11px;color:var(--muted);margin-top:7px}.macro-chart-grid{display:grid;gap:10px}.macro-chart{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:10px}.macro-chart-head{display:flex;justify-content:space-between;align-items:baseline;gap:8px}.macro-chart-name{font-weight:900}.macro-chart-value{color:#d7e7ff;font-weight:900}.macro-pos{color:#8aff8a}.macro-neg{color:#ff8585}.mini-svg{width:100%;height:108px;margin-top:8px;display:block}.mini-svg .axis{stroke:#263544;stroke-width:1}.mini-svg .line{fill:none;stroke:#7db1ff;stroke-width:3}.mini-svg .area{fill:#1b2d43;opacity:.55}
 .panel{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:12px;margin:12px 0}.panel h2{font-size:18px;margin:0 0 10px}.list{display:grid;gap:9px}
 .row{display:grid;grid-template-columns:34px 1fr auto;gap:8px;align-items:center;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:10px}.rank{font-size:18px;font-weight:900;color:var(--accent)}.name{font-weight:900;font-size:16px}.meta{font-size:12px;color:var(--muted);line-height:1.45;margin-top:3px}.score{text-align:right;color:var(--good);font-weight:900;font-size:14px}.chip{display:inline-block;border:1px solid #4f77aa;border-radius:999px;padding:2px 7px;margin:3px 3px 0 0;color:#d7e7ff;background:#26384d;font-size:11px}
 .empty{border:1px dashed #3d4a58;border-radius:12px;padding:18px;color:var(--muted);line-height:1.6}.refresh{width:100%;height:44px;border-radius:12px;border:0;background:#217c59;color:white;font-weight:900;margin-top:10px}
@@ -428,13 +476,13 @@ h1{font-size:24px;margin:0 0 4px}.status{font-size:12px;color:var(--muted);margi
     <button class="refresh" onclick="loadHot(true)">오늘 HOT 새로고침</button>
   </div>
   <div id="homeGrid" class="home-grid">
-    <div class="home-card big"><h2>오늘의 종목 HOT</h2><div id="stockCard"></div></div>
-    <div class="home-card big"><h2>시장·거시 HOT</h2><div id="macroCard"></div></div>
+    <div class="home-card"><h2>오늘의 종목 HOT</h2><div id="stockCard"></div></div>
+    <div class="home-card"><h2>시장·거시 HOT</h2><div id="macroCard"></div></div>
     <div class="home-card"><h2>보고서</h2><div id="reportCard"></div></div>
-    <div class="home-card"><h2>매크로</h2><div id="macroMiniCard"></div></div>
+    <div class="home-card action"><h2>매크로 그래프</h2><div id="macroMiniCard"></div></div>
     <div class="home-card"><h2>산업수출입</h2><div id="industryCard"></div></div>
     <div class="home-card"><h2>테마</h2><div id="themeCard"></div></div>
-    <div class="home-card big"><h2>관심종목</h2><div id="watchCard"></div></div>
+    <div class="home-card wide"><h2>관심종목</h2><div id="watchCard"></div></div>
   </div>
   <section id="detailPanel" class="panel"><h2 id="detailTitle">오늘의 종목 HOT 이슈</h2><div id="detailList" class="list"></div></section>
 </div>
@@ -450,11 +498,13 @@ function esc(s){return String(s||"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&l
 async function loadHot(force=false){const st=document.getElementById("status");st.textContent="오늘 HOT 계산 중...";try{const r=await fetch(`/api/hot?force=${force?1:0}&ts=${Date.now()}`);const d=await r.json();if(!d.ok)throw new Error(d.error||"로드 실패");DATA=d;render();st.innerHTML=`${esc(d.today)} / 뉴스 ${d.sourceNewsCount}건 / 업데이트 ${esc(d.generatedAt)} / 공유DB ${d.dbShared?"연결":"없음"}`}catch(e){st.innerHTML=`오류: ${esc(e.message)}`}}
 function render(){renderHome();showDetail("stock")}
 function ticker(rows,type){if(!rows.length)return "<div class='empty'>데이터 없음</div>";const first=rows[0];const main=type==="stock"?first.stockName:(type==="report"?first.stockName:first.name||first.keyword);const value=type==="report"?`${DATA.reports.count}개 리포트`:(first.newsCount?`뉴스 ${first.newsCount}건`:first.value||"");const lines=rows.slice(0,5).map((r,i)=>{const name=type==="stock"?r.stockName:(type==="report"?r.stockName:r.name||r.keyword);const val=type==="report"?(r.opinion||r.firm||"보고서"):(r.newsCount?`${r.newsCount}건`:r.value||"");return `<div class='ticker-line'><span class='ticker-rank'>${i+1}</span><span>${esc(name)}</span><span class='ticker-val'>${esc(val)}</span></div>`}).join("");return `<div class='home-main'>${esc(main||"-")}</div><div class='ticker'><div class='ticker-track'>${lines}${lines}</div></div><div class='hint'>눌러서 자세히 보기</div>`}
-function renderHome(){document.getElementById("stockCard").innerHTML=ticker(DATA.stockHot||[],"stock");document.getElementById("macroCard").innerHTML=ticker(DATA.macroHot||[],"macro");document.getElementById("reportCard").innerHTML=ticker(DATA.reports?.items||[],"report");document.getElementById("macroMiniCard").innerHTML=ticker(DATA.cards?.macro||[],"static");document.getElementById("industryCard").innerHTML=ticker(DATA.cards?.industry||[],"static");document.getElementById("themeCard").innerHTML=ticker(DATA.cards?.theme||[],"static");document.getElementById("watchCard").innerHTML=ticker(DATA.cards?.watch||[],"static");document.getElementById("stockCard").parentElement.onclick=()=>showDetail("stock");document.getElementById("macroCard").parentElement.onclick=()=>showDetail("macro");document.getElementById("reportCard").parentElement.onclick=()=>showDetail("report");document.getElementById("macroMiniCard").parentElement.onclick=()=>showDetail("macro");document.getElementById("industryCard").parentElement.onclick=()=>showDetail("industry");document.getElementById("themeCard").parentElement.onclick=()=>showDetail("theme");document.getElementById("watchCard").parentElement.onclick=()=>showDetail("watch")}
-function showDetail(type){const title={stock:"오늘의 종목 HOT 이슈",macro:"시장·거시 HOT 이슈",report:"최근 보고서",industry:"산업수출입",theme:"테마",watch:"관심종목"}[type]||"상세";document.getElementById("detailTitle").textContent=title;if(type==="stock")renderRows(DATA.stockHot||[],"stock");else if(type==="macro")renderRows(DATA.macroHot||[],"macro");else if(type==="report")renderReportRows(DATA.reports?.items||[]);else renderStaticRows(DATA.cards?.[type]||[],type)}
+function renderHome(){document.getElementById("stockCard").innerHTML=ticker(DATA.stockHot||[],"stock");document.getElementById("macroCard").innerHTML=ticker(DATA.macroHot||[],"macro");document.getElementById("reportCard").innerHTML=ticker(DATA.reports?.items||[],"report");document.getElementById("macroMiniCard").innerHTML="<div class='home-main'>환율·금리·유가</div><div class='hint'>눌러서 그래프 보기</div>";document.getElementById("industryCard").innerHTML=ticker(DATA.cards?.industry||[],"static");document.getElementById("themeCard").innerHTML=ticker(DATA.cards?.theme||[],"static");document.getElementById("watchCard").innerHTML=ticker(DATA.cards?.watch||[],"static");document.getElementById("stockCard").parentElement.onclick=()=>showDetail("stock");document.getElementById("macroCard").parentElement.onclick=()=>showDetail("macro");document.getElementById("reportCard").parentElement.onclick=()=>showDetail("report");document.getElementById("macroMiniCard").parentElement.onclick=()=>showDetail("macroChart");document.getElementById("industryCard").parentElement.onclick=()=>showDetail("industry");document.getElementById("themeCard").parentElement.onclick=()=>showDetail("theme");document.getElementById("watchCard").parentElement.onclick=()=>showDetail("watch")}
+function showDetail(type){const title={stock:"오늘의 종목 HOT 이슈",macro:"시장·거시 HOT 이슈",macroChart:"매크로 그래프",report:"최근 보고서",industry:"산업수출입",theme:"테마",watch:"관심종목"}[type]||"상세";document.getElementById("detailTitle").textContent=title;if(type==="stock")renderRows(DATA.stockHot||[],"stock");else if(type==="macro")renderRows(DATA.macroHot||[],"macro");else if(type==="macroChart")renderMacroCharts();else if(type==="report")renderReportRows(DATA.reports?.items||[]);else renderStaticRows(DATA.cards?.[type]||[],type)}
 function renderRows(rows,type){const el=document.getElementById("detailList");if(!rows.length){el.innerHTML="<div class='empty'>표시할 데이터가 없습니다.</div>";return}el.innerHTML=rows.slice(0,15).map((r,i)=>{const name=type==="stock"?r.stockName:r.keyword;const sub=type==="stock"?r.stockCode:(r.sources||[]).slice(0,2).join(", ");const chips=(r.keywords||[]).slice(0,4).map(k=>`<span class='chip'>${esc(k)}</span>`).join("");return `<div class='row' onclick='openModal("${type}",${i})'><div class='rank'>${i+1}</div><div><div class='name'>${esc(name)}</div><div class='meta'>${esc(sub)} / 뉴스 ${Number(r.newsCount||0)}건 / 점수 ${Number(r.score||0).toFixed(0)}<br>${chips}<br>${esc(r.title||"")}</div></div><div class='score'>${Number(r.newsCount||0)}건<br><span class='meta'>${Number(r.score||0).toFixed(0)}</span></div></div>`}).join("")}
 function renderReportRows(rows){const el=document.getElementById("detailList");if(!rows.length){el.innerHTML="<div class='empty'>보고서 데이터가 없습니다.</div>";return}el.innerHTML=rows.map((r,i)=>`<div class='row'><div class='rank'>${i+1}</div><div><div class='name'>${esc(r.stockName||"-")}</div><div class='meta'>${esc(r.firm||"")} / ${esc(r.opinion||"")} / 목표가 ${esc(r.targetPrice||"-")}<br>${esc(r.title||"")}</div></div><div class='score'>보고서</div></div>`).join("")}
 function renderStaticRows(rows,type){const el=document.getElementById("detailList");el.innerHTML=rows.map((r,i)=>`<div class='row'><div class='rank'>${i+1}</div><div><div class='name'>${esc(r.name)}</div><div class='meta'>${esc(r.value)} / 상세 데이터 연결 예정</div></div><div class='score'>준비중</div></div>`).join("")}
+function svgLine(series){if(!series||series.length<2)return "<div class='empty'>그래프 데이터 없음</div>";const w=320,h=108,p=12;const vals=series.map(x=>Number(x.value));const min=Math.min(...vals),max=Math.max(...vals);const span=max-min||1;const pts=series.map((d,i)=>{const x=p+i*(w-p*2)/(series.length-1);const y=p+(max-Number(d.value))/span*(h-p*2);return [x,y]}).map(p=>p.join(",")).join(" ");const area=`${p},${h-p} ${pts} ${w-p},${h-p}`;return `<svg class='mini-svg' viewBox='0 0 ${w} ${h}' preserveAspectRatio='none'><line class='axis' x1='${p}' y1='${h-p}' x2='${w-p}' y2='${h-p}'></line><polygon class='area' points='${area}'></polygon><polyline class='line' points='${pts}'></polyline></svg>`}
+function renderMacroCharts(){const el=document.getElementById("detailList");const rows=DATA.macroCharts||[];if(!rows.length){el.innerHTML="<div class='empty'>매크로 그래프 데이터가 없습니다.</div>";return}el.innerHTML=`<div class='macro-chart-grid'>${rows.map(r=>{const pct=Number(r.pct);const cls=pct>=0?"macro-pos":"macro-neg";return `<div class='macro-chart'><div class='macro-chart-head'><div class='macro-chart-name'>${esc(r.name)}</div><div class='macro-chart-value'>${r.latest==null?"-":Number(r.latest).toLocaleString()}${esc(r.unit||"")} <span class='${cls}'>${Number.isFinite(pct)?(pct>0?"+":"")+pct.toFixed(2)+"%":""}</span></div></div>${svgLine(r.series)}</div>`}).join("")}</div>`}
 function openModal(type,i){const r=(type==="stock"?DATA.stockHot:DATA.macroHot)[i];if(!r)return;document.getElementById("modalTitle").textContent=type==="stock"?`${r.stockName} 뉴스`:`${r.keyword} 뉴스`;document.getElementById("modalMeta").textContent=`뉴스 ${r.newsCount}건 / 점수 ${r.score}`;document.getElementById("modalBody").innerHTML=(r.articles||[]).map(a=>`<div class='news'><a href='${esc(a.link)}' target='_blank' rel='noreferrer'>${esc(a.title)}</a><div class='meta'>${esc(a.source)} ${esc(a.published)}</div></div>`).join("");document.getElementById("modal").classList.remove("hidden")}
 function closeModal(){document.getElementById("modal").classList.add("hidden")}
 loadHot(false);
