@@ -225,11 +225,13 @@ def parse_dt(text):
         return None
 
 
-def search_google_news(topic, query, max_results=70):
-    url = "https://news.google.com/rss/search?q=" + quote_plus(query + " when:1d") + "&hl=ko&gl=KR&ceid=KR:ko"
+def search_google_news(topic, query, max_results=70, target_date=None):
+    target_date = target_date or datetime.now(KST).date()
+    today = datetime.now(KST).date()
+    date_query = " when:1d" if target_date == today else " when:2d"
+    url = "https://news.google.com/rss/search?q=" + quote_plus(query + date_query) + "&hl=ko&gl=KR&ceid=KR:ko"
     root = ET.fromstring(http_get(url))
     out = []
-    today = datetime.now(KST).date()
     for item in root.findall(".//item"):
         title = (item.findtext("title") or "").strip()
         link = (item.findtext("link") or "").strip()
@@ -238,7 +240,7 @@ def search_google_news(topic, query, max_results=70):
         source = source_el.text.strip() if source_el is not None and source_el.text else "Google News"
         summary = strip_tags(item.findtext("description") or "")
         dt = parse_dt(pub)
-        if not title or not link or not dt or dt.date() != today:
+        if not title or not link or not dt or dt.date() != target_date:
             continue
         out.append({
             "topic": topic, "title": title, "link": link, "source": source,
@@ -285,12 +287,12 @@ def stock_mentioned(stock, text):
     return len(norm) >= 4 and norm in normalize_stock_name(text)
 
 
-def collect_today_items():
+def collect_news_items_for_date(target_date):
     items = []
     errors = []
     for q in MARKET_QUERIES:
         try:
-            found = search_google_news(q["name"], q["query"], 80)
+            found = search_google_news(q["name"], q["query"], 80, target_date)
             for it in found:
                 it["score"] = article_score(it)
                 it["query"] = q["name"]
@@ -298,6 +300,10 @@ def collect_today_items():
         except Exception as exc:
             errors.append(f"{q['name']}: {exc}")
     return dedupe(items), errors
+
+
+def collect_today_items():
+    return collect_news_items_for_date(datetime.now(KST).date())
 
 
 def build_stock_hot(items):
@@ -891,14 +897,37 @@ def hot_payload(force=False):
     now = time.time()
     if not force and HOT_CACHE["data"] and now - HOT_CACHE["loaded_at"] < 3600:
         return HOT_CACHE["data"]
-    items, errors = collect_today_items()
+    now_dt = datetime.now(KST)
+    today = now_dt.date()
+    items, errors = collect_news_items_for_date(today)
+    stock_hot = build_stock_hot(items)
+    macro_hot = build_macro_hot(items)
+    display_date = today
+    fallback_used = False
+    if now_dt.hour < 6 and (not items or not stock_hot or not macro_hot):
+        prev_items, prev_errors = collect_news_items_for_date(today - timedelta(days=1))
+        prev_stock_hot = build_stock_hot(prev_items)
+        prev_macro_hot = build_macro_hot(prev_items)
+        errors.extend(prev_errors)
+        if not items:
+            items = prev_items
+            display_date = today - timedelta(days=1)
+            fallback_used = True
+        if not stock_hot and prev_stock_hot:
+            stock_hot = prev_stock_hot
+            fallback_used = True
+        if not macro_hot and prev_macro_hot:
+            macro_hot = prev_macro_hot
+            fallback_used = True
     data = {
         "ok": True,
-        "generatedAt": datetime.now(KST).strftime("%Y-%m-%d %H:%M:%S"),
-        "today": datetime.now(KST).date().isoformat(),
+        "generatedAt": now_dt.strftime("%Y-%m-%d %H:%M:%S"),
+        "today": display_date.isoformat(),
+        "actualDate": today.isoformat(),
+        "fallbackUsed": fallback_used,
         "sourceNewsCount": len(items),
-        "stockHot": build_stock_hot(items),
-        "macroHot": build_macro_hot(items),
+        "stockHot": stock_hot,
+        "macroHot": macro_hot,
         "macroCharts": macro_snapshot(),
         "reports": report_summary(),
         "cards": rotating_static_cards(),
@@ -922,7 +951,7 @@ HTML = r"""<!doctype html>
 .app{max-width:760px;margin:0 auto;padding:14px 12px 90px}.top{position:sticky;top:0;z-index:10;background:linear-gradient(#0d131a 80%,rgba(13,19,26,0));padding:10px 0 12px}
 h1{font-size:24px;margin:0 0 4px}.status{font-size:12px;color:var(--muted);margin-top:8px}
 .home-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:14px 0}.home-card{min-height:132px;background:linear-gradient(180deg,#141d27,#111820);border:1px solid var(--line);border-radius:16px;padding:12px;overflow:hidden;box-shadow:0 10px 22px rgba(0,0,0,.16)}.home-card.wide{grid-column:span 2}.home-card.action{min-height:84px;display:flex;flex-direction:column;justify-content:center}.home-card h2{font-size:15px;margin:0 0 9px;letter-spacing:0}.home-card:nth-child(1) h2{color:#9dccff}.home-card:nth-child(2) h2{color:#ffcf9b}.home-card:nth-child(3) h2{color:#c3a7ff}.home-card:nth-child(4) h2{color:#42c7d8}.home-card:nth-child(5) h2{color:#8aff8a}.home-card:nth-child(6) h2{color:#ffb5d0}.home-card:nth-child(7) h2{color:#d7e7ff}
-.ticker{height:47px;overflow:hidden}.ticker-track{display:grid;gap:5px;animation:roll 10s linear infinite}.ticker-line{display:grid;grid-template-columns:18px minmax(0,1fr) auto;gap:5px;align-items:center;color:#d8e4ee;font-size:12px;min-height:21px}.ticker-line span:nth-child(2){white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.ticker-rank{color:var(--accent);font-weight:900}.ticker-val{color:var(--good);font-weight:800;font-size:11px;white-space:nowrap}@keyframes roll{0%,20%{transform:translateY(0)}28%,48%{transform:translateY(-26px)}56%,76%{transform:translateY(-52px)}84%,96%{transform:translateY(-78px)}100%{transform:translateY(0)}}.hint{font-size:11px;color:var(--muted);margin-top:7px}.report-home{height:78px;display:grid;grid-template-columns:62px 1fr;gap:10px;align-items:center}.report-art{height:58px;border-radius:14px;background:linear-gradient(145deg,#eef5ff,#9dccff);position:relative;box-shadow:0 12px 24px rgba(125,177,255,.18)}.report-art:before{content:"";position:absolute;left:14px;top:11px;width:34px;height:39px;border-radius:5px;background:#102131;box-shadow:5px 5px 0 rgba(16,33,49,.18)}.report-art:after{content:"";position:absolute;left:21px;top:19px;width:22px;height:3px;background:#7db1ff;box-shadow:0 8px 0 #8aff8a,0 16px 0 #ffcf9b}.report-home b{display:block;color:#d7e7ff;font-size:14px}.report-home span{display:block;color:#9fb0bf;font-size:11px;line-height:1.45;margin-top:3px}
+.ticker{height:47px;overflow:hidden}.ticker-track{display:grid;gap:5px;animation:roll 10s linear infinite}.ticker-line{display:grid;grid-template-columns:18px minmax(0,1fr) auto;gap:5px;align-items:center;color:#d8e4ee;font-size:12px;min-height:21px}.ticker-line span:nth-child(2){white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.ticker-rank{color:var(--accent);font-weight:900}.ticker-val{color:var(--good);font-weight:800;font-size:11px;white-space:nowrap}@keyframes roll{0%,20%{transform:translateY(0)}28%,48%{transform:translateY(-26px)}56%,76%{transform:translateY(-52px)}84%,96%{transform:translateY(-78px)}100%{transform:translateY(0)}}.hint{font-size:11px;color:var(--muted);margin-top:7px}.report-home{height:78px;display:grid;grid-template-columns:62px 1fr;gap:10px;align-items:center}.report-art{height:62px;border-radius:15px;background:#0d131a url('/static/report-card-d.png') center/cover no-repeat;border:1px solid #344151;box-shadow:0 12px 24px rgba(125,177,255,.18)}.report-home b{display:block;color:#d7e7ff;font-size:14px}.report-home span{display:block;color:#9fb0bf;font-size:11px;line-height:1.45;margin-top:3px}
 .macro-chart-grid{display:grid;gap:10px}.macro-chart{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:10px}.macro-chart-head{display:flex;justify-content:space-between;align-items:baseline;gap:8px}.macro-chart-name{font-weight:900}.macro-chart-value{color:#d7e7ff;font-weight:900}.macro-pos{color:#8aff8a}.macro-neg{color:#ff8585}.mini-svg{width:100%;height:108px;margin-top:8px;display:block}.mini-svg .axis{stroke:#263544;stroke-width:1}.mini-svg .line{fill:none;stroke:#7db1ff;stroke-width:3}.mini-svg .area{fill:#1b2d43;opacity:.55}
 .panel{display:none;background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:12px;margin:12px 0}.page-mode #homeGrid{display:none}.page-mode #detailPanel{display:block}.page-mode .refresh{display:none}.panel-head{display:flex;align-items:center;gap:10px;margin-bottom:10px}.back{border:1px solid #4f77aa;background:#26384d;color:#d7e7ff;border-radius:10px;width:38px;height:36px;font-size:18px}.panel h2{font-size:18px;margin:0}.list{display:grid;gap:9px}
 .row{display:grid;grid-template-columns:34px 1fr auto;gap:8px;align-items:center;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:10px}.rank{font-size:18px;font-weight:900;color:var(--accent)}.name{font-weight:900;font-size:16px}.meta{font-size:12px;color:var(--muted);line-height:1.45;margin-top:3px}.score{text-align:right;color:var(--good);font-weight:900;font-size:14px}.chip{display:inline-block;border:1px solid #4f77aa;border-radius:999px;padding:2px 7px;margin:3px 3px 0 0;color:#d7e7ff;background:#26384d;font-size:11px}.metric-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px}.metric{background:#202832;border:1px solid #344151;border-radius:12px;padding:10px}.metric b{display:block;color:#d7e7ff;font-size:18px}.metric span{display:block;color:#9fb0bf;font-size:11px;margin-top:3px}.section-note{background:#0f1720;border:1px solid #263544;border-radius:12px;padding:10px;color:#c7d4e0;font-size:12px;line-height:1.55;margin-bottom:10px}.mini-bars{display:grid;gap:7px;margin-top:8px}.mini-bar{display:grid;grid-template-columns:76px 1fr auto;gap:7px;align-items:center;font-size:12px}.bar-track{height:8px;background:#344151;border-radius:999px;overflow:hidden}.bar-fill{display:block;height:100%;background:#7db1ff}.pos{color:#8aff8a}.neg{color:#ff8585}
@@ -1004,7 +1033,14 @@ class Handler(BaseHTTPRequestHandler):
     def do_GET(self):
         try:
             parsed = urlparse(self.path)
-            if parsed.path == "/api/hot":
+            if parsed.path == "/static/report-card-d.png":
+                path = os.path.join(os.path.dirname(__file__), "static", "report-card-d.png")
+                if os.path.exists(path):
+                    with open(path, "rb") as f:
+                        self.send(200, f.read(), "image/png")
+                else:
+                    self.send(404, "not found", "text/plain; charset=utf-8")
+            elif parsed.path == "/api/hot":
                 force = "force=1" in self.path
                 self.send(200, json.dumps(hot_payload(force), ensure_ascii=False), "application/json; charset=utf-8")
             elif parsed.path == "/api/research-reports":
