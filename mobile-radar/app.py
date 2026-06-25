@@ -306,6 +306,80 @@ def build_macro_hot(items):
     return rows[:20]
 
 
+def report_summary():
+    db = extracted_report_db_path()
+    if not db or not os.path.exists(db):
+        return {"latestDate": "", "count": 0, "items": []}
+    try:
+        con = sqlite3.connect(db)
+        latest = con.execute("SELECT max(report_date) FROM reports WHERE report_date IS NOT NULL AND trim(report_date)!=''").fetchone()[0]
+        if not latest:
+            con.close()
+            return {"latestDate": "", "count": 0, "items": []}
+        rows = con.execute(
+            """
+            SELECT stock_name, stock_code, securities_firm, title, investment_opinion,
+                   target_price, report_url, count(*) OVER () AS total_count
+            FROM reports
+            WHERE report_date=?
+            ORDER BY
+              CASE WHEN target_price IS NULL OR trim(cast(target_price AS text))='' THEN 1 ELSE 0 END,
+              stock_name
+            LIMIT 12
+            """,
+            (latest,),
+        ).fetchall()
+        con.close()
+        items = []
+        total = int(rows[0][-1]) if rows else 0
+        for r in rows:
+            items.append({
+                "stockName": r[0] or "",
+                "stockCode": normalize_stock_code(r[1]),
+                "firm": r[2] or "",
+                "title": r[3] or "",
+                "opinion": r[4] or "",
+                "targetPrice": r[5],
+                "url": r[6] or "",
+            })
+        return {"latestDate": latest, "count": total, "items": items}
+    except Exception:
+        return {"latestDate": "", "count": 0, "items": []}
+
+
+def rotating_static_cards():
+    return {
+        "macro": [
+            {"name": "환율", "value": "원달러"},
+            {"name": "금리", "value": "국채금리"},
+            {"name": "유가", "value": "WTI"},
+            {"name": "코스피", "value": "시장 방향"},
+            {"name": "외국인", "value": "수급"},
+        ],
+        "industry": [
+            {"name": "반도체", "value": "수출 핵심"},
+            {"name": "조선", "value": "수주/선박"},
+            {"name": "화장품", "value": "K뷰티"},
+            {"name": "전력기기", "value": "변압기/전선"},
+            {"name": "자동차", "value": "완성차/부품"},
+        ],
+        "theme": [
+            {"name": "반도체/HBM", "value": "AI 수요"},
+            {"name": "전력기기", "value": "데이터센터"},
+            {"name": "조선", "value": "수주 사이클"},
+            {"name": "방산", "value": "수출/지정학"},
+            {"name": "바이오", "value": "임상/FDA"},
+        ],
+        "watch": [
+            {"name": "관심종목", "value": "준비중"},
+            {"name": "뉴스 발생", "value": "내 종목"},
+            {"name": "보고서 발생", "value": "내 종목"},
+            {"name": "수급 변화", "value": "내 종목"},
+            {"name": "목표가 변화", "value": "내 종목"},
+        ],
+    }
+
+
 def hot_payload(force=False):
     now = time.time()
     if not force and HOT_CACHE["data"] and now - HOT_CACHE["loaded_at"] < 3600:
@@ -318,6 +392,8 @@ def hot_payload(force=False):
         "sourceNewsCount": len(items),
         "stockHot": build_stock_hot(items),
         "macroHot": build_macro_hot(items),
+        "reports": report_summary(),
+        "cards": rotating_static_cards(),
         "errors": errors,
         "dbShared": bool(report_zip_path()),
     }
@@ -336,8 +412,8 @@ HTML = r"""<!doctype html>
 :root{--bg:#0d131a;--panel:#111820;--card:#202832;--line:#344151;--text:#f2f7ff;--muted:#9fb0bf;--good:#8aff8a;--accent:#9dccff}
 *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,BlinkMacSystemFont,"Malgun Gothic",sans-serif}
 .app{max-width:760px;margin:0 auto;padding:14px 12px 90px}.top{position:sticky;top:0;z-index:10;background:linear-gradient(#0d131a 80%,rgba(13,19,26,0));padding:10px 0 12px}
-h1{font-size:24px;margin:0 0 4px}p{margin:0;color:var(--muted);line-height:1.5}.status{font-size:12px;color:var(--muted);margin-top:8px}
-.tabs{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:14px 0}.tabs button{height:42px;border-radius:10px;border:1px solid #4f77aa;background:#26384d;color:#d7e7ff;font-weight:800}.tabs button.active{background:#2f81f7;color:white}
+h1{font-size:24px;margin:0 0 4px}.status{font-size:12px;color:var(--muted);margin-top:8px}
+.home-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:14px 0}.home-card{min-height:158px;background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:12px;overflow:hidden}.home-card.big{grid-column:span 2}.home-card h2{font-size:16px;margin:0 0 8px}.home-main{font-size:21px;font-weight:900;color:#d7e7ff;margin-bottom:8px}.ticker{height:78px;overflow:hidden}.ticker-track{display:grid;gap:5px;animation:roll 12s linear infinite}.ticker-line{display:grid;grid-template-columns:22px 1fr auto;gap:6px;align-items:center;color:#c7d4e0;font-size:13px}.ticker-rank{color:var(--accent);font-weight:900}.ticker-val{color:var(--good);font-weight:800;font-size:12px}@keyframes roll{0%,18%{transform:translateY(0)}25%,43%{transform:translateY(-25px)}50%,68%{transform:translateY(-50px)}75%,93%{transform:translateY(-75px)}100%{transform:translateY(0)}}.hint{font-size:11px;color:var(--muted);margin-top:8px}
 .panel{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:12px;margin:12px 0}.panel h2{font-size:18px;margin:0 0 10px}.list{display:grid;gap:9px}
 .row{display:grid;grid-template-columns:34px 1fr auto;gap:8px;align-items:center;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:10px}.rank{font-size:18px;font-weight:900;color:var(--accent)}.name{font-weight:900;font-size:16px}.meta{font-size:12px;color:var(--muted);line-height:1.45;margin-top:3px}.score{text-align:right;color:var(--good);font-weight:900;font-size:14px}.chip{display:inline-block;border:1px solid #4f77aa;border-radius:999px;padding:2px 7px;margin:3px 3px 0 0;color:#d7e7ff;background:#26384d;font-size:11px}
 .empty{border:1px dashed #3d4a58;border-radius:12px;padding:18px;color:var(--muted);line-height:1.6}.refresh{width:100%;height:44px;border-radius:12px;border:0;background:#217c59;color:white;font-weight:900;margin-top:10px}
@@ -348,16 +424,19 @@ h1{font-size:24px;margin:0 0 4px}p{margin:0;color:var(--muted);line-height:1.5}.
 <div class="app">
   <div class="top">
     <h1>시장레이더 Mobile</h1>
-    <p>오늘 00:00부터 현재까지 누적된 종목 HOT과 시장·거시 HOT을 봅니다.</p>
     <div id="status" class="status">불러오는 중...</div>
     <button class="refresh" onclick="loadHot(true)">오늘 HOT 새로고침</button>
   </div>
-  <div class="tabs">
-    <button id="stockBtn" class="active" onclick="showTab('stock')">종목 HOT</button>
-    <button id="macroBtn" onclick="showTab('macro')">시장·거시 HOT</button>
+  <div id="homeGrid" class="home-grid">
+    <div class="home-card big"><h2>오늘의 종목 HOT</h2><div id="stockCard"></div></div>
+    <div class="home-card big"><h2>시장·거시 HOT</h2><div id="macroCard"></div></div>
+    <div class="home-card"><h2>보고서</h2><div id="reportCard"></div></div>
+    <div class="home-card"><h2>매크로</h2><div id="macroMiniCard"></div></div>
+    <div class="home-card"><h2>산업수출입</h2><div id="industryCard"></div></div>
+    <div class="home-card"><h2>테마</h2><div id="themeCard"></div></div>
+    <div class="home-card big"><h2>관심종목</h2><div id="watchCard"></div></div>
   </div>
-  <section id="stockPanel" class="panel"><h2>오늘의 종목 HOT 이슈</h2><div id="stockList" class="list"></div></section>
-  <section id="macroPanel" class="panel" style="display:none"><h2>오늘의 시장·거시 HOT 이슈</h2><div id="macroList" class="list"></div></section>
+  <section id="detailPanel" class="panel"><h2 id="detailTitle">오늘의 종목 HOT 이슈</h2><div id="detailList" class="list"></div></section>
 </div>
 <div id="modal" class="modal hidden" onclick="closeModal()">
   <div class="sheet" onclick="event.stopPropagation()">
@@ -368,10 +447,14 @@ h1{font-size:24px;margin:0 0 4px}p{margin:0;color:var(--muted);line-height:1.5}.
 <script>
 let DATA=null;
 function esc(s){return String(s||"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#039;"}[m]))}
-function showTab(t){document.getElementById("stockPanel").style.display=t==="stock"?"block":"none";document.getElementById("macroPanel").style.display=t==="macro"?"block":"none";document.getElementById("stockBtn").classList.toggle("active",t==="stock");document.getElementById("macroBtn").classList.toggle("active",t==="macro")}
 async function loadHot(force=false){const st=document.getElementById("status");st.textContent="오늘 HOT 계산 중...";try{const r=await fetch(`/api/hot?force=${force?1:0}&ts=${Date.now()}`);const d=await r.json();if(!d.ok)throw new Error(d.error||"로드 실패");DATA=d;render();st.innerHTML=`${esc(d.today)} / 뉴스 ${d.sourceNewsCount}건 / 업데이트 ${esc(d.generatedAt)} / 공유DB ${d.dbShared?"연결":"없음"}`}catch(e){st.innerHTML=`오류: ${esc(e.message)}`}}
-function render(){renderRows("stockList",DATA.stockHot||[],"stock");renderRows("macroList",DATA.macroHot||[],"macro")}
-function renderRows(id,rows,type){const el=document.getElementById(id);if(!rows.length){el.innerHTML="<div class='empty'>표시할 HOT 데이터가 없습니다.</div>";return}el.innerHTML=rows.slice(0,15).map((r,i)=>{const name=type==="stock"?r.stockName:r.keyword;const sub=type==="stock"?r.stockCode:(r.sources||[]).slice(0,2).join(", ");const chips=(r.keywords||[]).slice(0,4).map(k=>`<span class='chip'>${esc(k)}</span>`).join("");return `<div class='row' onclick='openModal("${type}",${i})'><div class='rank'>${i+1}</div><div><div class='name'>${esc(name)}</div><div class='meta'>${esc(sub)} / 뉴스 ${Number(r.newsCount||0)}건 / 점수 ${Number(r.score||0).toFixed(0)}<br>${chips}<br>${esc(r.title||"")}</div></div><div class='score'>${Number(r.newsCount||0)}건<br><span class='meta'>${Number(r.score||0).toFixed(0)}</span></div></div>`}).join("")}
+function render(){renderHome();showDetail("stock")}
+function ticker(rows,type){if(!rows.length)return "<div class='empty'>데이터 없음</div>";const first=rows[0];const main=type==="stock"?first.stockName:(type==="report"?first.stockName:first.name||first.keyword);const value=type==="report"?`${DATA.reports.count}개 리포트`:(first.newsCount?`뉴스 ${first.newsCount}건`:first.value||"");const lines=rows.slice(0,5).map((r,i)=>{const name=type==="stock"?r.stockName:(type==="report"?r.stockName:r.name||r.keyword);const val=type==="report"?(r.opinion||r.firm||"보고서"):(r.newsCount?`${r.newsCount}건`:r.value||"");return `<div class='ticker-line'><span class='ticker-rank'>${i+1}</span><span>${esc(name)}</span><span class='ticker-val'>${esc(val)}</span></div>`}).join("");return `<div class='home-main'>${esc(main||"-")}</div><div class='ticker'><div class='ticker-track'>${lines}${lines}</div></div><div class='hint'>눌러서 자세히 보기</div>`}
+function renderHome(){document.getElementById("stockCard").innerHTML=ticker(DATA.stockHot||[],"stock");document.getElementById("macroCard").innerHTML=ticker(DATA.macroHot||[],"macro");document.getElementById("reportCard").innerHTML=ticker(DATA.reports?.items||[],"report");document.getElementById("macroMiniCard").innerHTML=ticker(DATA.cards?.macro||[],"static");document.getElementById("industryCard").innerHTML=ticker(DATA.cards?.industry||[],"static");document.getElementById("themeCard").innerHTML=ticker(DATA.cards?.theme||[],"static");document.getElementById("watchCard").innerHTML=ticker(DATA.cards?.watch||[],"static");document.getElementById("stockCard").parentElement.onclick=()=>showDetail("stock");document.getElementById("macroCard").parentElement.onclick=()=>showDetail("macro");document.getElementById("reportCard").parentElement.onclick=()=>showDetail("report");document.getElementById("macroMiniCard").parentElement.onclick=()=>showDetail("macro");document.getElementById("industryCard").parentElement.onclick=()=>showDetail("industry");document.getElementById("themeCard").parentElement.onclick=()=>showDetail("theme");document.getElementById("watchCard").parentElement.onclick=()=>showDetail("watch")}
+function showDetail(type){const title={stock:"오늘의 종목 HOT 이슈",macro:"시장·거시 HOT 이슈",report:"최근 보고서",industry:"산업수출입",theme:"테마",watch:"관심종목"}[type]||"상세";document.getElementById("detailTitle").textContent=title;if(type==="stock")renderRows(DATA.stockHot||[],"stock");else if(type==="macro")renderRows(DATA.macroHot||[],"macro");else if(type==="report")renderReportRows(DATA.reports?.items||[]);else renderStaticRows(DATA.cards?.[type]||[],type)}
+function renderRows(rows,type){const el=document.getElementById("detailList");if(!rows.length){el.innerHTML="<div class='empty'>표시할 데이터가 없습니다.</div>";return}el.innerHTML=rows.slice(0,15).map((r,i)=>{const name=type==="stock"?r.stockName:r.keyword;const sub=type==="stock"?r.stockCode:(r.sources||[]).slice(0,2).join(", ");const chips=(r.keywords||[]).slice(0,4).map(k=>`<span class='chip'>${esc(k)}</span>`).join("");return `<div class='row' onclick='openModal("${type}",${i})'><div class='rank'>${i+1}</div><div><div class='name'>${esc(name)}</div><div class='meta'>${esc(sub)} / 뉴스 ${Number(r.newsCount||0)}건 / 점수 ${Number(r.score||0).toFixed(0)}<br>${chips}<br>${esc(r.title||"")}</div></div><div class='score'>${Number(r.newsCount||0)}건<br><span class='meta'>${Number(r.score||0).toFixed(0)}</span></div></div>`}).join("")}
+function renderReportRows(rows){const el=document.getElementById("detailList");if(!rows.length){el.innerHTML="<div class='empty'>보고서 데이터가 없습니다.</div>";return}el.innerHTML=rows.map((r,i)=>`<div class='row'><div class='rank'>${i+1}</div><div><div class='name'>${esc(r.stockName||"-")}</div><div class='meta'>${esc(r.firm||"")} / ${esc(r.opinion||"")} / 목표가 ${esc(r.targetPrice||"-")}<br>${esc(r.title||"")}</div></div><div class='score'>보고서</div></div>`).join("")}
+function renderStaticRows(rows,type){const el=document.getElementById("detailList");el.innerHTML=rows.map((r,i)=>`<div class='row'><div class='rank'>${i+1}</div><div><div class='name'>${esc(r.name)}</div><div class='meta'>${esc(r.value)} / 상세 데이터 연결 예정</div></div><div class='score'>준비중</div></div>`).join("")}
 function openModal(type,i){const r=(type==="stock"?DATA.stockHot:DATA.macroHot)[i];if(!r)return;document.getElementById("modalTitle").textContent=type==="stock"?`${r.stockName} 뉴스`:`${r.keyword} 뉴스`;document.getElementById("modalMeta").textContent=`뉴스 ${r.newsCount}건 / 점수 ${r.score}`;document.getElementById("modalBody").innerHTML=(r.articles||[]).map(a=>`<div class='news'><a href='${esc(a.link)}' target='_blank' rel='noreferrer'>${esc(a.title)}</a><div class='meta'>${esc(a.source)} ${esc(a.published)}</div></div>`).join("");document.getElementById("modal").classList.remove("hidden")}
 function closeModal(){document.getElementById("modal").classList.add("hidden")}
 loadHot(false);
