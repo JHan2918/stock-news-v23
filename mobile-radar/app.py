@@ -120,6 +120,7 @@ def member_connect():
         )
         """
     )
+    ensure_default_members(con)
     con.commit()
     return con
 
@@ -136,6 +137,36 @@ def verify_password(password, salt, stored_hash):
     return hmac.compare_digest(digest, stored_hash or "")
 
 
+def ensure_default_members(con):
+    defaults = [
+        {"username": "admin", "password": "ljh7749", "name": "관리자", "phone": "", "email": "", "interests": "관리자"},
+        {"username": "login", "password": "1234", "name": "임시회원", "phone": "", "email": "", "interests": "오픈베타 체험"},
+    ]
+    for item in defaults:
+        row = con.execute("SELECT member_id FROM members WHERE username=?", (item["username"],)).fetchone()
+        if row:
+            continue
+        salt, pw_hash = hash_password(item["password"])
+        cur = con.execute(
+            """
+            INSERT INTO members(username,password_hash,salt,name,phone,email,interests)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+            """,
+            (item["username"], pw_hash, salt, item["name"], item["phone"], item["email"], item["interests"]),
+        )
+        member_id = cur.lastrowid
+        for idx, raw in enumerate(["삼성전자", "SK하이닉스", "현대차"], 1):
+            stock = resolve_watch_stock(raw)
+            if stock:
+                con.execute(
+                    """
+                    INSERT OR REPLACE INTO member_watchlist(member_id, stock_name, stock_code, sort_order)
+                    VALUES (?, ?, ?, ?)
+                    """,
+                    (member_id, stock["name"], stock["code"], idx),
+                )
+
+
 def parse_cookie(header):
     cookies = {}
     for part in (header or "").split(";"):
@@ -143,6 +174,10 @@ def parse_cookie(header):
             k, v = part.split("=", 1)
             cookies[k.strip()] = v.strip()
     return cookies
+
+
+def is_guest(handler):
+    return parse_cookie(handler.headers.get("Cookie", "")).get("mr_guest", "") == "1"
 
 
 def current_member(handler):
@@ -165,9 +200,9 @@ def current_member(handler):
         con.close()
 
 
-def make_session(member_id):
+def make_session(member_id, remember=True):
     token = secrets.token_urlsafe(32)
-    expires = datetime.now(KST) + timedelta(days=30)
+    expires = datetime.now(KST) + (timedelta(days=30) if remember else timedelta(hours=12))
     con = member_connect()
     try:
         con.execute(
@@ -1150,7 +1185,7 @@ AUTH_HTML = r"""<!doctype html>
 <style>
 :root{--bg:#0d131a;--panel:#111820;--card:#202832;--line:#344151;--text:#f2f7ff;--muted:#9fb0bf;--accent:#42c7d8}
 *{box-sizing:border-box}body{margin:0;background:radial-gradient(circle at 30% 0,#19304a,#0d131a 48%);color:var(--text);font-family:system-ui,-apple-system,BlinkMacSystemFont,"Malgun Gothic",sans-serif}
-.wrap{max-width:520px;margin:0 auto;padding:28px 16px 50px}.brand{margin-bottom:20px}.brand h1{font-size:28px;margin:0}.brand p{color:var(--muted);line-height:1.55;margin:8px 0 0}.tabs{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:18px 0}.tabs button{height:42px;border-radius:12px;border:1px solid var(--line);background:#101923;color:#d7e7ff;font-weight:900}.tabs button.active{background:linear-gradient(135deg,#42c7d8,#6bb8ff);color:#07131a;border:0}.card{background:rgba(17,24,32,.94);border:1px solid var(--line);border-radius:18px;padding:16px;box-shadow:0 18px 40px rgba(0,0,0,.28)}label{display:grid;gap:6px;color:#9fb0bf;font-size:12px;margin-bottom:10px}input,textarea{width:100%;min-height:42px;border-radius:12px;border:1px solid #344151;background:#0d131a;color:#f2f7ff;padding:0 12px;font-size:15px}textarea{padding-top:10px;line-height:1.45}button.submit{width:100%;height:46px;border:0;border-radius:13px;background:#2f81f7;color:white;font-weight:900;font-size:15px;margin-top:6px}.grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}.full{grid-column:span 2}.hint{color:#9fb0bf;font-size:12px;line-height:1.55;margin:8px 0 0}.error{display:none;background:#3a1d25;color:#ffb5b5;border:1px solid #6e3038;border-radius:12px;padding:10px;margin-bottom:10px;font-size:13px}.ok{display:none;background:#163222;color:#a8ffb1;border:1px solid #2c7a48;border-radius:12px;padding:10px;margin-bottom:10px;font-size:13px}.hidden{display:none}
+.wrap{max-width:520px;margin:0 auto;padding:28px 16px 50px}.brand{margin-bottom:20px}.brand h1{font-size:28px;margin:0}.brand p{color:var(--muted);line-height:1.55;margin:8px 0 0}.tabs{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:18px 0}.tabs button{height:42px;border-radius:12px;border:1px solid var(--line);background:#101923;color:#d7e7ff;font-weight:900}.tabs button.active{background:linear-gradient(135deg,#42c7d8,#6bb8ff);color:#07131a;border:0}.card{background:rgba(17,24,32,.94);border:1px solid var(--line);border-radius:18px;padding:16px;box-shadow:0 18px 40px rgba(0,0,0,.28)}label{display:grid;gap:6px;color:#9fb0bf;font-size:12px;margin-bottom:10px}input,textarea{width:100%;min-height:42px;border-radius:12px;border:1px solid #344151;background:#0d131a;color:#f2f7ff;padding:0 12px;font-size:15px}textarea{padding-top:10px;line-height:1.45}button.submit{width:100%;height:46px;border:0;border-radius:13px;background:#2f81f7;color:white;font-weight:900;font-size:15px;margin-top:6px}.grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}.full{grid-column:span 2}.hint{color:#9fb0bf;font-size:12px;line-height:1.55;margin:8px 0 0}.error{display:none;background:#3a1d25;color:#ffb5b5;border:1px solid #6e3038;border-radius:12px;padding:10px;margin-bottom:10px;font-size:13px}.ok{display:none;background:#163222;color:#a8ffb1;border:1px solid #2c7a48;border-radius:12px;padding:10px;margin-bottom:10px;font-size:13px}.hidden{display:none}.check{display:flex;grid-template-columns:none;align-items:center;gap:8px}.check input{width:18px;min-height:18px}.guest{width:100%;height:44px;border-radius:13px;border:1px solid #4f77aa;background:#101923;color:#d7e7ff;font-weight:900;margin-top:8px}
 </style>
 </head>
 <body>
@@ -1165,7 +1200,9 @@ AUTH_HTML = r"""<!doctype html>
     <form id="loginForm" onsubmit="login(event)">
       <label>아이디<input name="username" required autocomplete="username"></label>
       <label>비밀번호<input name="password" type="password" required autocomplete="current-password"></label>
+      <label class="check"><input name="remember" type="checkbox" checked> 자동로그인</label>
       <button class="submit">로그인</button>
+      <button type="button" class="guest" onclick="guestLogin()">비회원 경험하기</button>
       <p class="hint">처음이면 회원가입 탭에서 오픈베타 계정을 만들면 됩니다.</p>
     </form>
     <form id="joinForm" class="hidden" onsubmit="join(event)">
@@ -1191,8 +1228,9 @@ function mode(m){qs("#loginForm").classList.toggle("hidden",m!=="login");qs("#jo
 function msg(t,ok=false){qs("#msg").style.display=t&&!ok?"block":"none";qs("#ok").style.display=t&&ok?"block":"none";(ok?qs("#ok"):qs("#msg")).textContent=t||""}
 function formData(form){return Object.fromEntries(new FormData(form).entries())}
 async function post(url,data){const r=await fetch(url,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(data)});const d=await r.json().catch(()=>({ok:false,error:"응답 오류"}));if(!r.ok||!d.ok)throw new Error(d.error||"처리 실패");return d}
-async function login(ev){ev.preventDefault();try{await post("/api/auth/login",formData(ev.target));location.href="/"}catch(e){msg(e.message)}}
+async function login(ev){ev.preventDefault();const data=formData(ev.target);data.remember=ev.target.querySelector('[name=remember]').checked;try{await post("/api/auth/login",data);location.href="/"}catch(e){msg(e.message)}}
 async function join(ev){ev.preventDefault();try{await post("/api/auth/register",formData(ev.target));msg("가입 완료. 앱으로 이동합니다.",true);setTimeout(()=>location.href="/",450)}catch(e){msg(e.message)}}
+async function guestLogin(){try{await post("/api/auth/guest",{});location.href="/"}catch(e){msg(e.message)}}
 </script>
 </body>
 </html>"""
@@ -1305,7 +1343,11 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header("Content-Type", ctype)
         self.send_header("Content-Length", str(len(data)))
         for key, value in (headers or {}).items():
-            self.send_header(key, value)
+            if isinstance(value, (list, tuple)):
+                for one in value:
+                    self.send_header(key, one)
+            else:
+                self.send_header(key, value)
         self.end_headers()
         self.wfile.write(data)
 
@@ -1321,7 +1363,7 @@ class Handler(BaseHTTPRequestHandler):
             return {k: v[0] if v else "" for k, v in parse_qs(raw).items()}
 
     def auth_required(self, parsed):
-        if parsed.path in ("/login", "/api/auth/login", "/api/auth/register"):
+        if parsed.path in ("/login", "/api/auth/login", "/api/auth/register", "/api/auth/guest"):
             return False
         if parsed.path.startswith("/static/"):
             return False
@@ -1389,6 +1431,7 @@ class Handler(BaseHTTPRequestHandler):
             if parsed.path == "/api/auth/login":
                 username = str(data.get("username") or "").strip()
                 password = str(data.get("password") or "")
+                remember = bool(data.get("remember", True))
                 con = member_connect()
                 try:
                     row = con.execute("SELECT * FROM members WHERE username=?", (username,)).fetchone()
@@ -1396,16 +1439,17 @@ class Handler(BaseHTTPRequestHandler):
                     con.close()
                 if not row or not verify_password(password, row["salt"], row["password_hash"]):
                     return self.send_json(401, {"ok": False, "error": "아이디 또는 비밀번호가 맞지 않습니다."})
-                token, expires = make_session(row["member_id"])
-                return self.send_json(
-                    200,
-                    {"ok": True},
-                    {"Set-Cookie": f"mr_session={token}; Path=/; HttpOnly; SameSite=Lax; Max-Age={30*24*3600}"},
-                )
+                token, expires = make_session(row["member_id"], remember)
+                cookie = f"mr_session={token}; Path=/; HttpOnly; SameSite=Lax"
+                if remember:
+                    cookie += f"; Max-Age={30*24*3600}"
+                return self.send_json(200, {"ok": True}, {"Set-Cookie": cookie})
+            if parsed.path == "/api/auth/guest":
+                return self.send_json(200, {"ok": True, "guest": True}, {"Set-Cookie": "mr_guest=1; Path=/; SameSite=Lax; Max-Age=86400"})
             if parsed.path == "/api/auth/logout":
                 token = parse_cookie(self.headers.get("Cookie", "")).get("mr_session", "")
                 clear_session(token)
-                return self.send_json(200, {"ok": True}, {"Set-Cookie": "mr_session=; Path=/; Max-Age=0; HttpOnly; SameSite=Lax"})
+                return self.send_json(200, {"ok": True}, {"Set-Cookie": ["mr_session=; Path=/; Max-Age=0; HttpOnly; SameSite=Lax", "mr_guest=; Path=/; Max-Age=0; SameSite=Lax"]})
             return self.send_json(404, {"ok": False, "error": "not found"})
         except Exception as exc:
             self.send_json(500, {"ok": False, "error": str(exc), "trace": traceback.format_exc()})
@@ -1415,12 +1459,13 @@ class Handler(BaseHTTPRequestHandler):
         try:
             parsed = urlparse(self.path)
             member = current_member(self)
-            if self.auth_required(parsed) and not member:
+            guest = is_guest(self)
+            if self.auth_required(parsed) and not member and not guest:
                 if parsed.path.startswith("/api/"):
                     return self.send_json(401, {"ok": False, "error": "로그인이 필요합니다."})
                 return self.send(200, AUTH_HTML)
             if parsed.path == "/login":
-                return self.send(200, HTML if member else AUTH_HTML)
+                return self.send(200, HTML if (member or guest) else AUTH_HTML)
             if parsed.path in ("/static/report-card-d.png", "/static/macro-card.png", "/static/export-card.png", "/static/theme-card.png"):
                 filename = os.path.basename(parsed.path)
                 path = os.path.join(os.path.dirname(__file__), "static", filename)
@@ -1430,7 +1475,7 @@ class Handler(BaseHTTPRequestHandler):
                 else:
                     self.send(404, "not found", "text/plain; charset=utf-8")
             elif parsed.path == "/api/member/me":
-                self.send_json(200, member_payload(member))
+                self.send_json(200, member_payload(member) if member else {"ok": True, "authenticated": False, "guest": True, "watchlist": []})
             elif parsed.path == "/api/hot":
                 force = "force=1" in self.path
                 self.send(200, json.dumps(hot_payload(force), ensure_ascii=False), "application/json; charset=utf-8")
