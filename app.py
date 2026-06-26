@@ -1519,6 +1519,7 @@ function renderResearchReports(data){
   list.innerHTML=reports.map(r=>renderResearchReportCard(r)).join("");
 }
 
+function renderReportSummaryHtml(summary){summary=summary||"";if(!summary)return "-";const parts=summary.split(/\s*핵심:\s*/);if(parts.length>1){return `<div>${escapeHtml(parts[0].trim())}</div><div style="margin-top:6px"><b>핵심</b><br>${escapeHtml(parts.slice(1).join(" 핵심: ").trim())}</div>`}return escapeHtml(summary)}
 function renderResearchReportCard(r){
   const kws=(r.keywords || []).slice(0,8).map(k=>`<span class='report-chip'>${escapeHtml(k.keyword)}</span>`).join("");
   const reasons=(r.reasons || []).filter(x=>x && x.reason_text).slice(0,3).map(x=>`<li><b>${escapeHtml(x.reason_keyword || x.reason_type || "근거")}</b> ${escapeHtml(x.reason_text || "")}</li>`).join("");
@@ -1543,7 +1544,7 @@ function renderResearchReportCard(r){
         <div><span>현재가</span><b>${moneyText(r.current_price_at_report_date)}</b></div>
         <div><span>상승여력</span><b>${pctText(r.upside_potential)}</b></div>
       </div>
-      <div class='report-summary'><b>${escapeHtml(r.title || "")}</b><br>${escapeHtml(r.summary || "요약이 없습니다.")}</div>
+      <div class='report-summary'><b>${escapeHtml(r.title || "")}</b><br>${renderReportSummaryHtml(r.summary || "요약이 없습니다.")}</div>
       <div>${kws}</div>
       <div class='report-actions'>
         ${sourceUrl ? `<a href='${sourceUrl}' target='_blank' rel='noopener'>원문 열기</a>` : ""}
@@ -1570,7 +1571,7 @@ function renderResearchReportCard(r){
           <div id='${statusId}' class='report-chart-status'>상세 보기를 열면 주가, 목표가, 외국인/기관 수급을 함께 불러옵니다.</div>
         </div>
         <h4>요약</h4>
-        <div class='meta'>${escapeHtml(r.summary || "-")}</div>
+        <div class='meta'>${renderReportSummaryHtml(r.summary || "-")}</div>
         ${r.target_price_reason ? `<h4>목표가 이유</h4><div class='meta'>${escapeHtml(r.target_price_reason)}</div>` : ""}
         ${r.risk_summary ? `<h4>리스크</h4><div class='meta'>${escapeHtml(r.risk_summary)}</div>` : ""}
         ${reasons ? `<h4>추가 근거</h4><ul>${reasons}</ul>` : ""}
