@@ -1,7 +1,10 @@
 # -*- coding: utf-8 -*-
+import hashlib
+import hmac
 import json
 import os
 import re
+import secrets
 import sqlite3
 import tempfile
 import threading
@@ -60,6 +63,165 @@ STOCK_CACHE = {"items": None}
 
 def app_dir():
     return os.path.dirname(os.path.abspath(__file__))
+
+
+
+def member_db_path():
+    env = os.environ.get("MEMBER_DB_PATH")
+    if env:
+        return os.path.abspath(env)
+    base = os.environ.get("DATA_DIR") or os.path.join(app_dir(), "data")
+    return os.path.abspath(os.path.join(base, "members.db"))
+
+
+def member_connect():
+    db = member_db_path()
+    os.makedirs(os.path.dirname(db), exist_ok=True)
+    con = sqlite3.connect(db)
+    con.row_factory = sqlite3.Row
+    con.execute(
+        """
+        CREATE TABLE IF NOT EXISTS members (
+            member_id INTEGER PRIMARY KEY AUTOINCREMENT,
+            username TEXT NOT NULL UNIQUE,
+            password_hash TEXT NOT NULL,
+            salt TEXT NOT NULL,
+            name TEXT NOT NULL,
+            phone TEXT,
+            email TEXT,
+            interests TEXT,
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+            last_login_at TEXT
+        )
+        """
+    )
+    con.execute(
+        """
+        CREATE TABLE IF NOT EXISTS member_sessions (
+            token TEXT PRIMARY KEY,
+            member_id INTEGER NOT NULL,
+            expires_at TEXT NOT NULL,
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY(member_id) REFERENCES members(member_id)
+        )
+        """
+    )
+    con.execute(
+        """
+        CREATE TABLE IF NOT EXISTS member_watchlist (
+            watch_id INTEGER PRIMARY KEY AUTOINCREMENT,
+            member_id INTEGER NOT NULL,
+            stock_name TEXT NOT NULL,
+            stock_code TEXT,
+            sort_order INTEGER NOT NULL,
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY(member_id) REFERENCES members(member_id),
+            UNIQUE(member_id, sort_order)
+        )
+        """
+    )
+    con.commit()
+    return con
+
+
+def hash_password(password, salt=""):
+    if not salt:
+        salt = secrets.token_hex(16)
+    digest = hashlib.pbkdf2_hmac("sha256", str(password).encode("utf-8"), salt.encode("utf-8"), 160000)
+    return salt, digest.hex()
+
+
+def verify_password(password, salt, stored_hash):
+    _, digest = hash_password(password, salt)
+    return hmac.compare_digest(digest, stored_hash or "")
+
+
+def parse_cookie(header):
+    cookies = {}
+    for part in (header or "").split(";"):
+        if "=" in part:
+            k, v = part.split("=", 1)
+            cookies[k.strip()] = v.strip()
+    return cookies
+
+
+def current_member(handler):
+    token = parse_cookie(handler.headers.get("Cookie", "")).get("mr_session", "")
+    if not token:
+        return None
+    con = member_connect()
+    try:
+        row = con.execute(
+            """
+            SELECT m.member_id, m.username, m.name, m.phone, m.email, m.interests
+            FROM member_sessions s
+            JOIN members m ON m.member_id=s.member_id
+            WHERE s.token=? AND s.expires_at>?
+            """,
+            (token, datetime.now(KST).isoformat()),
+        ).fetchone()
+        return dict(row) if row else None
+    finally:
+        con.close()
+
+
+def make_session(member_id):
+    token = secrets.token_urlsafe(32)
+    expires = datetime.now(KST) + timedelta(days=30)
+    con = member_connect()
+    try:
+        con.execute(
+            "INSERT INTO member_sessions(token, member_id, expires_at) VALUES (?, ?, ?)",
+            (token, member_id, expires.isoformat()),
+        )
+        con.execute("UPDATE members SET last_login_at=CURRENT_TIMESTAMP WHERE member_id=?", (member_id,))
+        con.commit()
+    finally:
+        con.close()
+    return token, expires
+
+
+def clear_session(token):
+    if not token:
+        return
+    con = member_connect()
+    try:
+        con.execute("DELETE FROM member_sessions WHERE token=?", (token,))
+        con.commit()
+    finally:
+        con.close()
+
+
+def resolve_watch_stock(raw):
+    raw = str(raw or "").strip()
+    if not raw:
+        return None
+    code = normalize_stock_code(raw)
+    name_key = normalize_stock_name(raw)
+    for item in stock_master():
+        if (code and item.get("code") == code) or normalize_stock_name(item.get("name")) == name_key:
+            return {"name": item.get("name") or raw, "code": item.get("code") or code}
+    return {"name": raw, "code": code}
+
+
+def member_payload(member):
+    if not member:
+        return {"ok": False, "authenticated": False}
+    con = member_connect()
+    try:
+        watch = db_rows(
+            con,
+            """
+            SELECT stock_name AS name, stock_code AS code, sort_order
+            FROM member_watchlist
+            WHERE member_id=?
+            ORDER BY sort_order
+            """,
+            (member["member_id"],),
+        )
+    finally:
+        con.close()
+    return {"ok": True, "authenticated": True, "member": member, "watchlist": watch}
 
 
 def data_dirs():
@@ -979,6 +1141,63 @@ def hot_payload(force=False):
     return data
 
 
+AUTH_HTML = r"""<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Market Radar Login</title>
+<style>
+:root{--bg:#0d131a;--panel:#111820;--card:#202832;--line:#344151;--text:#f2f7ff;--muted:#9fb0bf;--accent:#42c7d8}
+*{box-sizing:border-box}body{margin:0;background:radial-gradient(circle at 30% 0,#19304a,#0d131a 48%);color:var(--text);font-family:system-ui,-apple-system,BlinkMacSystemFont,"Malgun Gothic",sans-serif}
+.wrap{max-width:520px;margin:0 auto;padding:28px 16px 50px}.brand{margin-bottom:20px}.brand h1{font-size:28px;margin:0}.brand p{color:var(--muted);line-height:1.55;margin:8px 0 0}.tabs{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:18px 0}.tabs button{height:42px;border-radius:12px;border:1px solid var(--line);background:#101923;color:#d7e7ff;font-weight:900}.tabs button.active{background:linear-gradient(135deg,#42c7d8,#6bb8ff);color:#07131a;border:0}.card{background:rgba(17,24,32,.94);border:1px solid var(--line);border-radius:18px;padding:16px;box-shadow:0 18px 40px rgba(0,0,0,.28)}label{display:grid;gap:6px;color:#9fb0bf;font-size:12px;margin-bottom:10px}input,textarea{width:100%;min-height:42px;border-radius:12px;border:1px solid #344151;background:#0d131a;color:#f2f7ff;padding:0 12px;font-size:15px}textarea{padding-top:10px;line-height:1.45}button.submit{width:100%;height:46px;border:0;border-radius:13px;background:#2f81f7;color:white;font-weight:900;font-size:15px;margin-top:6px}.grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}.full{grid-column:span 2}.hint{color:#9fb0bf;font-size:12px;line-height:1.55;margin:8px 0 0}.error{display:none;background:#3a1d25;color:#ffb5b5;border:1px solid #6e3038;border-radius:12px;padding:10px;margin-bottom:10px;font-size:13px}.ok{display:none;background:#163222;color:#a8ffb1;border:1px solid #2c7a48;border-radius:12px;padding:10px;margin-bottom:10px;font-size:13px}.hidden{display:none}
+</style>
+</head>
+<body>
+<main class="wrap">
+  <div class="brand">
+    <h1>Market Radar</h1>
+    <p>오픈베타 회원 전용 화면입니다. 관심종목 3개를 저장하면 이후 뉴스, 보고서, 테마 흐름을 관심종목 중심으로 확장할 수 있습니다.</p>
+  </div>
+  <div class="tabs"><button id="loginTab" class="active" onclick="mode('login')">로그인</button><button id="joinTab" onclick="mode('join')">회원가입</button></div>
+  <section class="card">
+    <div id="msg" class="error"></div><div id="ok" class="ok"></div>
+    <form id="loginForm" onsubmit="login(event)">
+      <label>아이디<input name="username" required autocomplete="username"></label>
+      <label>비밀번호<input name="password" type="password" required autocomplete="current-password"></label>
+      <button class="submit">로그인</button>
+      <p class="hint">처음이면 회원가입 탭에서 오픈베타 계정을 만들면 됩니다.</p>
+    </form>
+    <form id="joinForm" class="hidden" onsubmit="join(event)">
+      <div class="grid">
+        <label>아이디<input name="username" required autocomplete="username"></label>
+        <label>비밀번호<input name="password" type="password" required autocomplete="new-password" minlength="6"></label>
+        <label>이름<input name="name" required></label>
+        <label>전화번호<input name="phone" inputmode="tel"></label>
+        <label class="full">이메일<input name="email" type="email"></label>
+        <label class="full">관심분야<textarea name="interests" rows="2" placeholder="예: 반도체, 바이오, 방산, 수출데이터"></textarea></label>
+        <label>관심종목 1<input name="stock1" placeholder="삼성전자 또는 005930"></label>
+        <label>관심종목 2<input name="stock2" placeholder="SK하이닉스"></label>
+        <label class="full">관심종목 3<input name="stock3" placeholder="현대차"></label>
+      </div>
+      <button class="submit">회원가입 후 시작</button>
+      <p class="hint">관심종목은 최대 3개만 저장됩니다. 나중에 관심종목 중심 알림/뉴스 카드와 연결할 수 있습니다.</p>
+    </form>
+  </section>
+</main>
+<script>
+function qs(x){return document.querySelector(x)}
+function mode(m){qs("#loginForm").classList.toggle("hidden",m!=="login");qs("#joinForm").classList.toggle("hidden",m!=="join");qs("#loginTab").classList.toggle("active",m==="login");qs("#joinTab").classList.toggle("active",m==="join");msg("")}
+function msg(t,ok=false){qs("#msg").style.display=t&&!ok?"block":"none";qs("#ok").style.display=t&&ok?"block":"none";(ok?qs("#ok"):qs("#msg")).textContent=t||""}
+function formData(form){return Object.fromEntries(new FormData(form).entries())}
+async function post(url,data){const r=await fetch(url,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(data)});const d=await r.json().catch(()=>({ok:false,error:"응답 오류"}));if(!r.ok||!d.ok)throw new Error(d.error||"처리 실패");return d}
+async function login(ev){ev.preventDefault();try{await post("/api/auth/login",formData(ev.target));location.href="/"}catch(e){msg(e.message)}}
+async function join(ev){ev.preventDefault();try{await post("/api/auth/register",formData(ev.target));msg("가입 완료. 앱으로 이동합니다.",true);setTimeout(()=>location.href="/",450)}catch(e){msg(e.message)}}
+</script>
+</body>
+</html>"""
+
+
 HTML = r"""<!doctype html>
 <html lang="ko">
 <head>
@@ -997,7 +1216,7 @@ h1{font-size:24px;margin:0 0 4px}.status{font-size:12px;color:var(--muted);margi
 .row{display:grid;grid-template-columns:34px 1fr auto;gap:8px;align-items:center;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:10px}.rank{font-size:18px;font-weight:900;color:var(--accent)}.name{font-weight:900;font-size:16px}.meta{font-size:12px;color:var(--muted);line-height:1.45;margin-top:3px}.score{text-align:right;color:var(--good);font-weight:900;font-size:14px}.chip{display:inline-block;border:1px solid #4f77aa;border-radius:999px;padding:2px 7px;margin:3px 3px 0 0;color:#d7e7ff;background:#26384d;font-size:11px}.metric-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px}.metric{background:#202832;border:1px solid #344151;border-radius:12px;padding:10px}.metric b{display:block;color:#d7e7ff;font-size:18px}.metric span{display:block;color:#9fb0bf;font-size:11px;margin-top:3px}.section-note{background:#0f1720;border:1px solid #263544;border-radius:12px;padding:10px;color:#c7d4e0;font-size:12px;line-height:1.55;margin-bottom:10px}.mini-bars{display:grid;gap:7px;margin-top:8px}.mini-bar{display:grid;grid-template-columns:76px 1fr auto;gap:7px;align-items:center;font-size:12px}.bar-track{height:8px;background:#344151;border-radius:999px;overflow:hidden}.bar-fill{display:block;height:100%;background:#7db1ff}.pos{color:#8aff8a}.neg{color:#ff8585}
 .industry-controls{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px}.industry-controls label{display:grid;gap:4px;color:#9fb0bf;font-size:11px}.industry-controls input,.industry-controls select{width:100%;height:38px;border-radius:10px;border:1px solid #344151;background:#0d131a;color:#f2f7ff;padding:0 10px;font-size:13px}.industry-controls .full{grid-column:span 2}.industry-controls button{grid-column:span 2;height:40px;border:0;border-radius:11px;background:#2f81f7;color:#fff;font-weight:900}.industry-picks{display:flex;gap:6px;overflow-x:auto;padding:2px 0 10px;margin-top:-2px}.industry-picks button{flex:0 0 auto;border:1px solid #4f77aa;background:#26384d;color:#d7e7ff;border-radius:999px;padding:6px 9px;font-size:12px}.industry-chart{width:100%;height:210px;display:block;background:#0b1118;border:1px solid #263544;border-radius:10px;margin:8px 0}.industry-stat-table{width:100%;border-collapse:collapse;font-size:12px}.industry-stat-table th,.industry-stat-table td{border-bottom:1px solid #263544;padding:7px 4px;text-align:right}.industry-stat-table th:first-child,.industry-stat-table td:first-child{text-align:left}.industry-stat-table th{color:#9fb0bf;font-weight:500}
 .theme-controls-mobile{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px}.theme-controls-mobile label{display:grid;gap:4px;color:#9fb0bf;font-size:11px}.theme-controls-mobile input{width:100%;height:38px;border-radius:10px;border:1px solid #344151;background:#0d131a;color:#f2f7ff;padding:0 10px;font-size:13px}.theme-controls-mobile button{grid-column:span 2;height:40px;border:0;border-radius:11px;background:#2f81f7;color:#fff;font-weight:900}.theme-card-list{display:grid;gap:8px;margin-bottom:10px}.theme-mini-card{background:#202832;border:1px solid #344151;border-radius:12px;padding:10px;cursor:pointer}.theme-mini-card.active{border-color:#7db1ff;box-shadow:0 0 0 1px #2f81f7 inset}.theme-mini-head{display:flex;justify-content:space-between;gap:8px;align-items:baseline}.theme-mini-head b{font-size:15px}.theme-mini-score{color:#9dccff;font-weight:900}.theme-bar{height:7px;background:#344151;border-radius:999px;overflow:hidden;margin-top:8px}.theme-bar span{display:block;height:100%;background:#7db1ff}.theme-mini-line{display:grid;grid-template-columns:78px 1fr auto;gap:6px;align-items:center;font-size:11px;color:#9fb0bf;margin-top:6px}.theme-stock-table{width:100%;border-collapse:collapse;font-size:12px}.theme-stock-table th,.theme-stock-table td{border-bottom:1px solid #263544;padding:7px 4px;text-align:right}.theme-stock-table th:first-child,.theme-stock-table td:first-child{text-align:left}.theme-stock-table th{color:#9fb0bf;font-weight:500}.theme-keywords{display:flex;gap:5px;flex-wrap:wrap;margin-top:8px}.theme-keywords span{border:1px solid #4f77aa;background:#26384d;color:#d7e7ff;border-radius:999px;padding:3px 7px;font-size:11px}
-.report-filter{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px}.report-filter label{display:grid;gap:4px;color:#9fb0bf;font-size:11px}.report-filter input{width:100%;height:38px;border-radius:10px;border:1px solid #344151;background:#0d131a;color:#f2f7ff;padding:0 10px;font-size:13px}.report-filter .full{grid-column:span 2;position:relative}.report-filter button{grid-column:span 2;height:40px;border:0;border-radius:11px;background:#2f81f7;color:white;font-weight:900}.suggestions{position:absolute;left:0;right:0;top:58px;z-index:20;background:#0d131a;border:1px solid #4f77aa;border-radius:12px;overflow:hidden;box-shadow:0 12px 28px rgba(0,0,0,.35)}.suggestions.hidden{display:none}.suggestion{display:flex;justify-content:space-between;gap:8px;padding:10px;border-bottom:1px solid #263544}.suggestion b{color:#d7e7ff}.suggestion span{color:#9dccff;font-size:12px}.report-row{display:block;padding:11px}.report-row-head{display:flex;align-items:baseline;justify-content:space-between;gap:10px;margin-bottom:5px}.report-title-wrap{min-width:0;display:flex;align-items:baseline;gap:7px}.report-no{flex:0 0 auto;color:var(--accent);font-weight:900;font-size:15px}.report-upside{flex:0 0 auto;text-align:right;color:var(--good);font-weight:900;font-size:14px}.report-row .name{min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.report-actions{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}.report-actions a,.report-actions button{border:1px solid #4f77aa;background:#26384d;color:#d7e7ff;text-decoration:none;border-radius:9px;padding:6px 8px;font-size:12px}.report-actions button.primary{background:#2f81f7;color:white}.detail-card{background:#0d131a;border:1px solid #344151;border-radius:12px;padding:10px;margin-top:8px}.detail-card.hidden,.hidden{display:none}.chart-summary{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin:8px 0}.chart-pill{background:#101923;border:1px solid #263544;border-radius:10px;padding:7px}.chart-pill span{display:block;color:#9fb0bf;font-size:10px}.chart-pill b{display:block;color:#d7e7ff;font-size:13px;margin-top:2px}.chart-pill.good b{color:#8aff8a}.chart-pill.bad b{color:#ff8585}.detail-chart{width:100%;height:220px;display:block;background:#0b1118;border:1px solid #263544;border-radius:10px;margin:8px 0}.empty{border:1px dashed #3d4a58;border-radius:12px;padding:18px;color:var(--muted);line-height:1.6}.refresh{width:100%;height:44px;border-radius:12px;border:0;background:linear-gradient(135deg,#42c7d8,#6bb8ff);color:#07131a;font-weight:900;margin-top:10px;box-shadow:0 8px 20px rgba(66,199,216,.18)}
+.report-filter{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px}.report-filter label{display:grid;gap:4px;color:#9fb0bf;font-size:11px}.report-filter input{width:100%;height:38px;border-radius:10px;border:1px solid #344151;background:#0d131a;color:#f2f7ff;padding:0 10px;font-size:13px}.report-filter .full{grid-column:span 2;position:relative}.report-filter button{grid-column:span 2;height:40px;border:0;border-radius:11px;background:#2f81f7;color:white;font-weight:900}.suggestions{position:absolute;left:0;right:0;top:58px;z-index:20;background:#0d131a;border:1px solid #4f77aa;border-radius:12px;overflow:hidden;box-shadow:0 12px 28px rgba(0,0,0,.35)}.suggestions.hidden{display:none}.suggestion{display:flex;justify-content:space-between;gap:8px;padding:10px;border-bottom:1px solid #263544}.suggestion b{color:#d7e7ff}.suggestion span{color:#9dccff;font-size:12px}.report-row{display:block;padding:11px}.report-row-head{display:flex;align-items:baseline;justify-content:space-between;gap:10px;margin-bottom:5px}.report-title-wrap{min-width:0;display:flex;align-items:baseline;gap:7px}.report-no{flex:0 0 auto;color:var(--accent);font-weight:900;font-size:15px}.report-upside{flex:0 0 auto;text-align:right;color:var(--good);font-weight:900;font-size:14px}.report-row .name{min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.report-actions{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}.report-actions a,.report-actions button{border:1px solid #4f77aa;background:#26384d;color:#d7e7ff;text-decoration:none;border-radius:9px;padding:6px 8px;font-size:12px}.report-actions button.primary{background:#2f81f7;color:white}.detail-card{background:#0d131a;border:1px solid #344151;border-radius:12px;padding:10px;margin-top:8px}.detail-card.hidden,.hidden{display:none}.chart-summary{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin:8px 0}.chart-pill{background:#101923;border:1px solid #263544;border-radius:10px;padding:7px}.chart-pill span{display:block;color:#9fb0bf;font-size:10px}.chart-pill b{display:block;color:#d7e7ff;font-size:13px;margin-top:2px}.chart-pill.good b{color:#8aff8a}.chart-pill.bad b{color:#ff8585}.detail-chart{width:100%;height:220px;display:block;background:#0b1118;border:1px solid #263544;border-radius:10px;margin:8px 0}.empty{border:1px dashed #3d4a58;border-radius:12px;padding:18px;color:var(--muted);line-height:1.6}.refresh{width:100%;height:44px;border-radius:12px;border:0;background:linear-gradient(135deg,#42c7d8,#6bb8ff);color:#07131a;font-weight:900;margin-top:10px;box-shadow:0 8px 20px rgba(66,199,216,.18)}.logout{float:right;border:1px solid #344151;background:#101923;color:#9fb0bf;border-radius:999px;padding:5px 9px;font-size:11px}
 .modal{position:fixed;inset:0;background:rgba(0,0,0,.65);z-index:99;display:flex;align-items:flex-end}.modal.hidden{display:none}.sheet{width:100%;max-height:84vh;overflow:auto;background:#111820;border:1px solid #344151;border-radius:18px 18px 0 0;padding:16px}.sheet-head{display:flex;justify-content:space-between;gap:12px;border-bottom:1px solid #344151;padding-bottom:10px;margin-bottom:10px}.close{border:1px solid #4f77aa;background:#26384d;color:#d7e7ff;border-radius:9px;padding:6px 10px}.news{border-bottom:1px solid #263544;padding:10px 0}.news a{color:#d7e7ff;text-decoration:none;font-weight:800}.news a:hover{text-decoration:underline}
 </style>
 </head>
@@ -1072,22 +1291,136 @@ function svgLine(series,pct){if(!series||series.length<2)return "<div class='emp
 function renderMacroCharts(){const el=document.getElementById("detailList");const rows=DATA.macroCharts||[];if(!rows.length){el.innerHTML="<div class='empty'>매크로 차트 데이터가 없습니다.</div>";return}const grouped={};rows.forEach(r=>{const k=r.category||"기타";(grouped[k]=grouped[k]||[]).push(r)});el.innerHTML=Object.keys(grouped).map(cat=>`<div class='section-note'><b>${esc(cat)}</b></div><div class='macro-chart-grid'>${grouped[cat].map(r=>{const pct=Number(r.pct);const cls=pct>=0?"macro-pos":"macro-neg";const sign=Number.isFinite(pct)?(pct>0?"+":"")+pct.toFixed(2)+"%":"";return `<div class='macro-chart'><div class='macro-chart-head'><div class='macro-chart-name'>${esc(r.name)}</div><div class='macro-chart-value'>${r.latest==null?"-":Number(r.latest).toLocaleString()}${esc(r.unit||"")} <span class='${cls}'>${sign}</span></div></div>${svgLine(r.series,pct)}</div>`}).join("")}</div>`).join("")}
 function openModal(type,i){const r=(type==="stock"?DATA.stockHot:DATA.macroHot)[i];if(!r)return;document.getElementById("modalTitle").textContent=type==="stock"?`${r.stockName} 뉴스`:`${r.keyword} 뉴스`;document.getElementById("modalMeta").textContent=`뉴스 ${r.newsCount}건 / 점수 ${r.score}`;document.getElementById("modalBody").innerHTML=(r.articles||[]).map(a=>`<div class='news'><a href='${esc(a.link)}' target='_blank' rel='noreferrer'>${esc(a.title)}</a><div class='meta'>${esc(a.source)} ${esc(a.published)}</div></div>`).join("");document.getElementById("modal").classList.remove("hidden")}
 function closeModal(){document.getElementById("modal").classList.add("hidden")}
-loadHot(false);
+async function logout(){try{await fetch('/api/auth/logout',{method:'POST'});location.href='/login'}catch(e){location.href='/login'}}
+async function loadMember(){try{const r=await fetch("/api/member/me?ts="+Date.now());const d=await r.json();if(d.ok&&d.authenticated){renderMemberWatch(d)}}catch(e){}}
+function renderMemberWatch(d){const el=document.getElementById("watchCard");if(!el)return;const rows=d.watchlist||[];if(!rows.length){el.innerHTML="<div class='empty'>관심종목이 아직 없습니다.</div>";return}el.innerHTML=rows.map((r,i)=>`<div class='ticker-line'><span class='ticker-rank'>${i+1}</span><span>${esc(r.name)}</span><span class='ticker-val'>${esc(r.code||"")}</span></div>`).join("")+`<div class='hint'>${esc(d.member?.name||"회원")}님의 관심종목</div>`}
+loadHot(false).then(loadMember);
 </script>
 </body>
 </html>"""
 class Handler(BaseHTTPRequestHandler):
-    def send(self, status, content, ctype="text/html; charset=utf-8"):
+    def send(self, status, content, ctype="text/html; charset=utf-8", headers=None):
         data = content.encode("utf-8") if isinstance(content, str) else content
         self.send_response(status)
         self.send_header("Content-Type", ctype)
         self.send_header("Content-Length", str(len(data)))
+        for key, value in (headers or {}).items():
+            self.send_header(key, value)
         self.end_headers()
         self.wfile.write(data)
+
+    def send_json(self, status, payload, headers=None):
+        self.send(status, json.dumps(payload, ensure_ascii=False), "application/json; charset=utf-8", headers=headers)
+
+    def read_json(self):
+        length = int(self.headers.get("Content-Length", "0") or 0)
+        raw = self.rfile.read(length).decode("utf-8") if length else "{}"
+        try:
+            return json.loads(raw or "{}")
+        except Exception:
+            return {k: v[0] if v else "" for k, v in parse_qs(raw).items()}
+
+    def auth_required(self, parsed):
+        if parsed.path in ("/login", "/api/auth/login", "/api/auth/register"):
+            return False
+        if parsed.path.startswith("/static/"):
+            return False
+        return True
+
+    def do_POST(self):
+        try:
+            parsed = urlparse(self.path)
+            data = self.read_json()
+            if parsed.path == "/api/auth/register":
+                username = str(data.get("username") or "").strip()
+                password = str(data.get("password") or "")
+                name = str(data.get("name") or "").strip()
+                if len(username) < 3:
+                    return self.send_json(400, {"ok": False, "error": "아이디는 3자 이상이어야 합니다."})
+                if len(password) < 6:
+                    return self.send_json(400, {"ok": False, "error": "비밀번호는 6자 이상이어야 합니다."})
+                if not name:
+                    return self.send_json(400, {"ok": False, "error": "이름을 입력해주세요."})
+                salt, pw_hash = hash_password(password)
+                con = member_connect()
+                try:
+                    cur = con.execute(
+                        """
+                        INSERT INTO members(username,password_hash,salt,name,phone,email,interests)
+                        VALUES (?, ?, ?, ?, ?, ?, ?)
+                        """,
+                        (
+                            username,
+                            pw_hash,
+                            salt,
+                            name,
+                            str(data.get("phone") or "").strip(),
+                            str(data.get("email") or "").strip(),
+                            str(data.get("interests") or "").strip(),
+                        ),
+                    )
+                    member_id = cur.lastrowid
+                    stocks = [data.get("stock1"), data.get("stock2"), data.get("stock3")]
+                    for idx, raw in enumerate(stocks, 1):
+                        stock = resolve_watch_stock(raw)
+                        if stock:
+                            con.execute(
+                                """
+                                INSERT OR REPLACE INTO member_watchlist(member_id, stock_name, stock_code, sort_order)
+                                VALUES (?, ?, ?, ?)
+                                """,
+                                (member_id, stock["name"], stock["code"], idx),
+                            )
+                    con.commit()
+                except sqlite3.IntegrityError:
+                    con.close()
+                    return self.send_json(409, {"ok": False, "error": "이미 사용 중인 아이디입니다."})
+                finally:
+                    try:
+                        con.close()
+                    except Exception:
+                        pass
+                token, expires = make_session(member_id)
+                return self.send_json(
+                    200,
+                    {"ok": True},
+                    {"Set-Cookie": f"mr_session={token}; Path=/; HttpOnly; SameSite=Lax; Max-Age={30*24*3600}"},
+                )
+            if parsed.path == "/api/auth/login":
+                username = str(data.get("username") or "").strip()
+                password = str(data.get("password") or "")
+                con = member_connect()
+                try:
+                    row = con.execute("SELECT * FROM members WHERE username=?", (username,)).fetchone()
+                finally:
+                    con.close()
+                if not row or not verify_password(password, row["salt"], row["password_hash"]):
+                    return self.send_json(401, {"ok": False, "error": "아이디 또는 비밀번호가 맞지 않습니다."})
+                token, expires = make_session(row["member_id"])
+                return self.send_json(
+                    200,
+                    {"ok": True},
+                    {"Set-Cookie": f"mr_session={token}; Path=/; HttpOnly; SameSite=Lax; Max-Age={30*24*3600}"},
+                )
+            if parsed.path == "/api/auth/logout":
+                token = parse_cookie(self.headers.get("Cookie", "")).get("mr_session", "")
+                clear_session(token)
+                return self.send_json(200, {"ok": True}, {"Set-Cookie": "mr_session=; Path=/; Max-Age=0; HttpOnly; SameSite=Lax"})
+            return self.send_json(404, {"ok": False, "error": "not found"})
+        except Exception as exc:
+            self.send_json(500, {"ok": False, "error": str(exc), "trace": traceback.format_exc()})
+
 
     def do_GET(self):
         try:
             parsed = urlparse(self.path)
+            member = current_member(self)
+            if self.auth_required(parsed) and not member:
+                if parsed.path.startswith("/api/"):
+                    return self.send_json(401, {"ok": False, "error": "로그인이 필요합니다."})
+                return self.send(200, AUTH_HTML)
+            if parsed.path == "/login":
+                return self.send(200, HTML if member else AUTH_HTML)
             if parsed.path in ("/static/report-card-d.png", "/static/macro-card.png", "/static/export-card.png", "/static/theme-card.png"):
                 filename = os.path.basename(parsed.path)
                 path = os.path.join(os.path.dirname(__file__), "static", filename)
@@ -1096,6 +1429,8 @@ class Handler(BaseHTTPRequestHandler):
                         self.send(200, f.read(), "image/png")
                 else:
                     self.send(404, "not found", "text/plain; charset=utf-8")
+            elif parsed.path == "/api/member/me":
+                self.send_json(200, member_payload(member))
             elif parsed.path == "/api/hot":
                 force = "force=1" in self.path
                 self.send(200, json.dumps(hot_payload(force), ensure_ascii=False), "application/json; charset=utf-8")
