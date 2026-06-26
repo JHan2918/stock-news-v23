@@ -1521,7 +1521,7 @@ function renderResearchReports(data){
 
 function renderResearchReportCard(r){
   const kws=(r.keywords || []).slice(0,8).map(k=>`<span class='report-chip'>${escapeHtml(k.keyword)}</span>`).join("");
-  const reasons=(r.reasons || []).slice(0,5).map(x=>`<li><b>${escapeHtml(x.reason_keyword || x.reason_type || "근거")}</b> ${escapeHtml(x.reason_text || "")}</li>`).join("");
+  const reasons=(r.reasons || []).filter(x=>x && x.reason_text).slice(0,3).map(x=>`<li><b>${escapeHtml(x.reason_keyword || x.reason_type || "근거")}</b> ${escapeHtml(x.reason_text || "")}</li>`).join("");
   const sourceUrl=r.report_url || "";
   const detailId=`report-detail-${r.report_id}`;
   const chartId=`report-chart-${r.report_id}`;
@@ -1569,12 +1569,11 @@ function renderResearchReportCard(r){
           <canvas id='${flowCanvasId}'></canvas>
           <div id='${statusId}' class='report-chart-status'>상세 보기를 열면 주가, 목표가, 외국인/기관 수급을 함께 불러옵니다.</div>
         </div>
-        <h4>목표가 이유</h4>
-        <div class='meta'>${escapeHtml(r.target_price_reason || "-")}</div>
-        <h4>리스크</h4>
-        <div class='meta'>${escapeHtml(r.risk_summary || "-")}</div>
-        <h4>보고서 요약 근거</h4>
-        ${reasons ? `<ul>${reasons}</ul>` : "<div class='meta'>등록된 근거가 없습니다.</div>"}
+        <h4>요약</h4>
+        <div class='meta'>${escapeHtml(r.summary || "-")}</div>
+        ${r.target_price_reason ? `<h4>목표가 이유</h4><div class='meta'>${escapeHtml(r.target_price_reason)}</div>` : ""}
+        ${r.risk_summary ? `<h4>리스크</h4><div class='meta'>${escapeHtml(r.risk_summary)}</div>` : ""}
+        ${reasons ? `<h4>추가 근거</h4><ul>${reasons}</ul>` : ""}
       </div>
     </div>`;
 }
