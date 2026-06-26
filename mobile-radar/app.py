@@ -468,6 +468,60 @@ def dedupe(items):
     return out
 
 
+
+def news_map_keywords(items, seed):
+    stop = {
+        "뉴스", "증권", "주식", "시장", "오늘", "관련", "전망", "종목", "투자", "기자",
+        "경제", "한국", "국내", "코스피", "코스닥", "서울", "이번", "지난", "최근",
+        "상승", "하락", "실적", "주가", "목표가", "매수", "매도", "유지", "상향", "하향",
+        "company", "stock", "news", "market", "finance",
+    }
+    counts = {}
+    seed_norm = normalize_stock_name(seed)
+    for item in items:
+        text = f"{item.get('title','')} {item.get('summary','')}"
+        words = re.findall(r"[가-힣A-Za-z0-9]{2,}", text)
+        seen = set()
+        for word in words:
+            clean = word.strip()
+            if not clean or clean in stop or re.fullmatch(r"\d+", clean):
+                continue
+            if seed_norm and normalize_stock_name(clean) == seed_norm:
+                continue
+            if len(clean) <= 1:
+                continue
+            seen.add(clean)
+        for word in seen:
+            counts[word] = counts.get(word, 0) + 1
+    ranked = sorted(counts.items(), key=lambda x: (x[1], len(x[0])), reverse=True)[:12]
+    nodes = [{"id": seed, "label": seed, "count": len(items), "kind": "stock"}]
+    edges = []
+    for word, count in ranked:
+        nodes.append({"id": word, "label": word, "count": count, "kind": "keyword"})
+        edges.append({"source": seed, "target": word, "weight": count})
+    return nodes, edges
+
+
+def news_map_payload(q="", limit=40):
+    q = str(q or "").strip()
+    if not q:
+        return {"ok": False, "error": "검색어가 없습니다."}
+    limit = max(10, min(int(limit or 40), 80))
+    query = f"{q} 주가 OR 실적 OR 수주 OR 목표가 OR 증권 OR 투자 OR 뉴스"
+    items = dedupe(search_google_news(q, query, max_results=limit))
+    for item in items:
+        item["score"] = article_score(item)
+    items.sort(key=lambda item: item.get("score", 0), reverse=True)
+    nodes, edges = news_map_keywords(items, q)
+    return {
+        "ok": True,
+        "query": q,
+        "newsCount": len(items),
+        "articles": items[:30],
+        "graph": {"nodes": nodes, "edges": edges},
+        "generatedAt": datetime.now(KST).strftime("%Y-%m-%d %H:%M:%S"),
+    }
+
 def article_score(item):
     text = f"{item.get('title','')} {item.get('summary','')}"
     low = text.lower()
@@ -1255,6 +1309,8 @@ h1{font-size:24px;margin:0 0 4px}.status{font-size:12px;color:var(--muted);margi
 .industry-controls{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px}.industry-controls label{display:grid;gap:4px;color:#9fb0bf;font-size:11px}.industry-controls input,.industry-controls select{width:100%;height:38px;border-radius:10px;border:1px solid #344151;background:#0d131a;color:#f2f7ff;padding:0 10px;font-size:13px}.industry-controls .full{grid-column:span 2}.industry-controls button{grid-column:span 2;height:40px;border:0;border-radius:11px;background:#2f81f7;color:#fff;font-weight:900}.industry-picks{display:flex;gap:6px;overflow-x:auto;padding:2px 0 10px;margin-top:-2px}.industry-picks button{flex:0 0 auto;border:1px solid #4f77aa;background:#26384d;color:#d7e7ff;border-radius:999px;padding:6px 9px;font-size:12px}.industry-chart{width:100%;height:210px;display:block;background:#0b1118;border:1px solid #263544;border-radius:10px;margin:8px 0}.industry-stat-table{width:100%;border-collapse:collapse;font-size:12px}.industry-stat-table th,.industry-stat-table td{border-bottom:1px solid #263544;padding:7px 4px;text-align:right}.industry-stat-table th:first-child,.industry-stat-table td:first-child{text-align:left}.industry-stat-table th{color:#9fb0bf;font-weight:500}
 .theme-controls-mobile{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px}.theme-controls-mobile label{display:grid;gap:4px;color:#9fb0bf;font-size:11px}.theme-controls-mobile input{width:100%;height:38px;border-radius:10px;border:1px solid #344151;background:#0d131a;color:#f2f7ff;padding:0 10px;font-size:13px}.theme-controls-mobile button{grid-column:span 2;height:40px;border:0;border-radius:11px;background:#2f81f7;color:#fff;font-weight:900}.theme-card-list{display:grid;gap:8px;margin-bottom:10px}.theme-mini-card{background:#202832;border:1px solid #344151;border-radius:12px;padding:10px;cursor:pointer}.theme-mini-card.active{border-color:#7db1ff;box-shadow:0 0 0 1px #2f81f7 inset}.theme-mini-head{display:flex;justify-content:space-between;gap:8px;align-items:baseline}.theme-mini-head b{font-size:15px}.theme-mini-score{color:#9dccff;font-weight:900}.theme-bar{height:7px;background:#344151;border-radius:999px;overflow:hidden;margin-top:8px}.theme-bar span{display:block;height:100%;background:#7db1ff}.theme-mini-line{display:grid;grid-template-columns:78px 1fr auto;gap:6px;align-items:center;font-size:11px;color:#9fb0bf;margin-top:6px}.theme-stock-table{width:100%;border-collapse:collapse;font-size:12px}.theme-stock-table th,.theme-stock-table td{border-bottom:1px solid #263544;padding:7px 4px;text-align:right}.theme-stock-table th:first-child,.theme-stock-table td:first-child{text-align:left}.theme-stock-table th{color:#9fb0bf;font-weight:500}.theme-keywords{display:flex;gap:5px;flex-wrap:wrap;margin-top:8px}.theme-keywords span{border:1px solid #4f77aa;background:#26384d;color:#d7e7ff;border-radius:999px;padding:3px 7px;font-size:11px}
 .member-form{display:grid;grid-template-columns:1fr 1fr;gap:8px}.member-form label{display:grid;gap:4px;color:#9fb0bf;font-size:11px}.member-form input,.member-form textarea{width:100%;border-radius:10px;border:1px solid #344151;background:#0d131a;color:#f2f7ff;padding:9px 10px;font-size:13px}.member-form textarea{min-height:72px;line-height:1.45}.member-form .full{grid-column:span 2}.member-form button{grid-column:span 2;height:40px;border:0;border-radius:11px;background:#2f81f7;color:#fff;font-weight:900}.member-form .readonly{background:#101923;color:#9fb0bf}.save-msg{grid-column:span 2;color:#8aff8a;font-size:12px;min-height:18px}.report-filter{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px}.report-filter label{display:grid;gap:4px;color:#9fb0bf;font-size:11px}.report-filter input{width:100%;height:38px;border-radius:10px;border:1px solid #344151;background:#0d131a;color:#f2f7ff;padding:0 10px;font-size:13px}.report-filter .full{grid-column:span 2;position:relative}.report-filter button{grid-column:span 2;height:40px;border:0;border-radius:11px;background:#2f81f7;color:white;font-weight:900}.suggestions{position:absolute;left:0;right:0;top:58px;z-index:20;background:#0d131a;border:1px solid #4f77aa;border-radius:12px;overflow:hidden;box-shadow:0 12px 28px rgba(0,0,0,.35)}.suggestions.hidden{display:none}.suggestion{display:flex;justify-content:space-between;gap:8px;padding:10px;border-bottom:1px solid #263544}.suggestion b{color:#d7e7ff}.suggestion span{color:#9dccff;font-size:12px}.report-row{display:block;padding:11px}.report-row-head{display:flex;align-items:baseline;justify-content:space-between;gap:10px;margin-bottom:5px}.report-title-wrap{min-width:0;display:flex;align-items:baseline;gap:7px}.report-no{flex:0 0 auto;color:var(--accent);font-weight:900;font-size:15px}.report-upside{flex:0 0 auto;text-align:right;color:var(--good);font-weight:900;font-size:14px}.report-row .name{min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.report-actions{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}.report-actions a,.report-actions button{border:1px solid #4f77aa;background:#26384d;color:#d7e7ff;text-decoration:none;border-radius:9px;padding:6px 8px;font-size:12px}.report-actions button.primary{background:#2f81f7;color:white}.detail-card{background:#0d131a;border:1px solid #344151;border-radius:12px;padding:10px;margin-top:8px}.detail-card.hidden,.hidden{display:none}.chart-summary{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin:8px 0}.chart-pill{background:#101923;border:1px solid #263544;border-radius:10px;padding:7px}.chart-pill span{display:block;color:#9fb0bf;font-size:10px}.chart-pill b{display:block;color:#d7e7ff;font-size:13px;margin-top:2px}.chart-pill.good b{color:#8aff8a}.chart-pill.bad b{color:#ff8585}.detail-chart{width:100%;height:220px;display:block;background:#0b1118;border:1px solid #263544;border-radius:10px;margin:8px 0}.empty{border:1px dashed #3d4a58;border-radius:12px;padding:18px;color:var(--muted);line-height:1.6}.refresh{width:100%;height:44px;border-radius:12px;border:0;background:linear-gradient(135deg,#42c7d8,#6bb8ff);color:#07131a;font-weight:900;margin-top:10px;box-shadow:0 8px 20px rgba(66,199,216,.18)}.top-actions{display:flex;justify-content:flex-end;gap:6px;margin-bottom:4px}.top-actions button{border:1px solid #344151;background:#101923;color:#9fb0bf;border-radius:999px;padding:5px 9px;font-size:11px}.watch-stock{background:#101923;border:1px solid #263544;border-radius:14px;padding:10px;margin-bottom:10px}.watch-stock h3{margin:0 0 7px;font-size:17px}.watch-actions{display:flex;gap:6px;flex-wrap:wrap;margin:8px 0}.watch-actions a,.watch-actions button{border:1px solid #4f77aa;background:#26384d;color:#d7e7ff;text-decoration:none;border-radius:9px;padding:6px 8px;font-size:12px}.watch-actions button{background:#2f81f7;color:white}
+.news-map{background:#0b1118;border:1px solid #263544;border-radius:12px;margin:8px 0;padding:8px}.news-map svg{width:100%;height:230px;display:block}.news-map-edge{stroke:#39516a;stroke-width:1.4}.news-map-node{fill:#26384d;stroke:#7db1ff;stroke-width:1.5}.news-map-node.stock{fill:#123241;stroke:#42c7d8;stroke-width:2}.news-map-text{fill:#d7e7ff;font-size:10px;font-weight:800;text-anchor:middle}.news-map-count{fill:#9fb0bf;font-size:9px;text-anchor:middle}.news-map-news{display:grid;gap:8px;margin-top:8px}.news-map-news .news{border:1px solid #263544;border-radius:10px;padding:9px;background:#101923}
+
 .modal{position:fixed;inset:0;background:rgba(0,0,0,.65);z-index:99;display:flex;align-items:flex-end}.modal.hidden{display:none}.sheet{width:100%;max-height:84vh;overflow:auto;background:#111820;border:1px solid #344151;border-radius:18px 18px 0 0;padding:16px}.sheet-head{display:flex;justify-content:space-between;gap:12px;border-bottom:1px solid #344151;padding-bottom:10px;margin-bottom:10px}.close{border:1px solid #4f77aa;background:#26384d;color:#d7e7ff;border-radius:9px;padding:6px 10px}.news{border-bottom:1px solid #263544;padding:10px 0}.news a{color:#d7e7ff;text-decoration:none;font-weight:800}.news a:hover{text-decoration:underline}
 </style>
 </head>
@@ -1334,10 +1390,53 @@ function closeModal(){document.getElementById("modal").classList.add("hidden")}
 async function logout(){try{await fetch('/api/auth/logout',{method:'POST'});location.href='/login'}catch(e){location.href='/login'}}
 async function loadMember(){try{const r=await fetch("/api/member/me?ts="+Date.now());const d=await r.json();MEMBER_DATA=d;if(d.ok&&d.authenticated){renderMemberWatch(d)}}catch(e){}}
 function renderMemberWatch(d){const el=document.getElementById("watchCard");if(!el)return;const rows=d.watchlist||[];if(!rows.length){el.innerHTML="<div class='empty'>관심종목이 아직 없습니다.</div><div class='hint'>설정에서 관심종목을 등록하세요</div>";return}el.innerHTML=rows.map((r,i)=>`<div class='ticker-line'><span class='ticker-rank'>${i+1}</span><span>${esc(r.name)}</span><span class='ticker-val'>${esc(r.code||"")}</span></div>`).join("")+`<div class='hint'>뉴스·보고서·주가·수급 보기</div>`}
-function renderWatchDashboard(){const el=document.getElementById("detailList");const d=MEMBER_DATA||{};if(!d.authenticated){el.innerHTML="<div class='section-note'>비회원 체험 중입니다. 관심종목 대시보드는 회원가입/로그인 후 사용할 수 있습니다.</div>";return}const rows=d.watchlist||[];if(!rows.length){el.innerHTML="<div class='empty'>관심종목이 없습니다. 상단 설정에서 관심종목 3개를 등록하세요.</div>";return}el.innerHTML=`<div class='section-note'><b>${esc(d.member?.name||"회원")}님의 관심종목</b><br>각 종목의 뉴스, 최근 보고서, 주가와 외국인/기관 수급 흐름을 한 화면에서 봅니다.</div>`+rows.map((r,i)=>`<div class='watch-stock' id='watchStock${i}'><h3>${i+1}. ${esc(r.name)} <span class='meta'>${esc(r.code||"")}</span></h3><div class='watch-actions'><a href='https://www.google.com/search?tbm=nws&q=${encodeURIComponent(r.name)}' target='_blank' rel='noreferrer'>뉴스검색</a><button onclick='loadWatchStock(${i},"${esc(r.code||"")}","${esc(r.name||"")}")'>주가·수급 새로고침</button></div><div id='watchBody${i}'><div class='empty'>데이터를 불러오는 중...</div></div></div>`).join("");rows.forEach((r,i)=>loadWatchStock(i,r.code||"",r.name||""))}
+function renderWatchDashboard(){const el=document.getElementById("detailList");const d=MEMBER_DATA||{};if(!d.authenticated){el.innerHTML="<div class='section-note'>비회원 체험 중입니다. 관심종목 대시보드는 회원가입/로그인 후 사용할 수 있습니다.</div>";return}const rows=d.watchlist||[];if(!rows.length){el.innerHTML="<div class='empty'>관심종목이 없습니다. 상단 설정에서 관심종목 3개를 등록하세요.</div>";return}el.innerHTML=`<div class='section-note'><b>${esc(d.member?.name||"회원")}님의 관심종목</b><br>각 종목의 뉴스, 최근 보고서, 주가와 외국인/기관 수급 흐름을 한 화면에서 봅니다.</div>`+rows.map((r,i)=>`<div class='watch-stock' id='watchStock${i}'><h3>${i+1}. ${esc(r.name)} <span class='meta'>${esc(r.code||"")}</span></h3><div class='watch-actions'><button onclick='loadWatchNewsMap(${i},"${esc(r.name||"")}")'>뉴스 연관맵</button><button onclick='loadWatchStock(${i},"${esc(r.code||"")}","${esc(r.name||"")}")'>주가·수급 새로고침</button></div><div id='watchBody${i}'><div class='empty'>데이터를 불러오는 중...</div></div></div>`).join("");rows.forEach((r,i)=>loadWatchStock(i,r.code||"",r.name||""))}
 async function loadWatchStock(i,code,name){const box=document.getElementById(`watchBody${i}`);if(!box)return;box.innerHTML="<div class='empty'>주가·수급·보고서를 불러오는 중...</div>";try{const chartReq=fetch(`/api/report-price-chart?${new URLSearchParams({stock_code:code||"",period:"3m",ts:String(Date.now())}).toString()}`).then(r=>r.json());const reportReq=fetch(`/api/research-reports?${new URLSearchParams({q:code||name||"",limit:"3",ts:String(Date.now())}).toString()}`).then(r=>r.json());const [chart,reports]=await Promise.all([chartReq,reportReq]);const reportRows=(reports.reports||[]).slice(0,3);const reportHtml=reportRows.length?reportRows.map(r=>`<div class='meta'>${esc(r.report_date)} / ${esc(r.securities_firm||"")} / ${esc(r.investment_opinion||"")} / 목표가 ${r.target_price?num(r.target_price)+"원":"-"}<br>${esc(r.title||"")}</div>`).join(""):"<div class='meta'>최근 보고서가 없습니다.</div>";box.innerHTML=`<div class='section-note'><b>최근 보고서</b>${reportHtml}</div><div class='meta'>주가 흐름</div>${priceTargetSvg(chart.closeSeries||[],chart.targetSeries||[])}<div class='meta'>외국인/기관 순매수</div>${flowSvg(chart.flowSeries||[])}`}catch(e){box.innerHTML=`<div class='empty'>관심종목 데이터 오류: ${esc(e.message)}</div>`}}
 function renderMemberPage(){const el=document.getElementById("detailList");const d=MEMBER_DATA||{};if(!d.authenticated){el.innerHTML="<div class='section-note'>비회원 체험 중입니다. 관심종목 저장은 회원가입/로그인 후 사용할 수 있습니다.</div>";return}const m=d.member||{};const w=d.watchlist||[];el.innerHTML=`<div class='section-note'><b>${esc(m.name||"회원")}</b><br>아이디 ${esc(m.username||"")} / 이메일 ${esc(m.email||"-")}<br>관심분야 ${esc(m.interests||"-")}</div><form class='member-form' onsubmit='saveMember(event)'><label>아이디<input class='readonly' name='username' value='${esc(m.username||"")}' readonly></label><label>이름<input name='name' value='${esc(m.name||"")}' required></label><label>전화번호<input name='phone' value='${esc(m.phone||"")}'></label><label>이메일<input name='email' type='email' value='${esc(m.email||"")}'></label><label class='full'>관심분야<textarea name='interests'>${esc(m.interests||"")}</textarea></label><label>관심종목 1<input name='stock1' value='${esc(w[0]?.name||w[0]?.code||"")}' placeholder='삼성전자 또는 005930'></label><label>관심종목 2<input name='stock2' value='${esc(w[1]?.name||w[1]?.code||"")}' placeholder='SK하이닉스'></label><label class='full'>관심종목 3<input name='stock3' value='${esc(w[2]?.name||w[2]?.code||"")}' placeholder='현대차'></label><div id='memberSaveMsg' class='save-msg'></div><button>정보 저장</button></form>`}
 async function saveMember(ev){ev.preventDefault();const msg=document.getElementById("memberSaveMsg");msg.textContent="저장 중...";try{const data=Object.fromEntries(new FormData(ev.target).entries());const r=await fetch("/api/member/update",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(data)});const d=await r.json();if(!r.ok||!d.ok)throw new Error(d.error||"저장 실패");MEMBER_DATA=d;renderMemberWatch(d);renderMemberPage();document.getElementById("memberSaveMsg").textContent="저장 완료"}catch(e){msg.textContent=e.message}}
+
+let LAST_NEWS_MAP=null;
+function newsMapSvg(graph){
+  const nodes=(graph&&graph.nodes)||[], edges=(graph&&graph.edges)||[];
+  if(!nodes.length)return "<div class='empty'>뉴스 연관 키워드가 없습니다.</div>";
+  const w=340,h=230,cx=w/2,cy=h/2,r=82;
+  const center=nodes[0], others=nodes.slice(1);
+  const pos={};
+  pos[center.id]={x:cx,y:cy};
+  others.forEach((n,i)=>{const a=(-Math.PI/2)+(Math.PI*2*i/Math.max(others.length,1));pos[n.id]={x:cx+Math.cos(a)*r,y:cy+Math.sin(a)*r}});
+  const lines=edges.map(e=>{const a=pos[e.source],b=pos[e.target];if(!a||!b)return "";return `<line class='news-map-edge' x1='${a.x}' y1='${a.y}' x2='${b.x}' y2='${b.y}'></line>`}).join("");
+  const circles=nodes.map((n,i)=>{const p=pos[n.id];const size=i===0?34:Math.max(22,Math.min(30,18+Number(n.count||1)*2));const label=esc(String(n.label||n.id||"").slice(0,9));const count=Number(n.count||0);const click=i===0?`showNewsForKeyword("")`:`showNewsForKeyword("${esc(String(n.id||"").replace(/"/g,""))}")`;return `<g onclick='${click}' style='cursor:pointer'><circle class='news-map-node ${i===0?"stock":""}' cx='${p.x}' cy='${p.y}' r='${size}'></circle><text class='news-map-text' x='${p.x}' y='${p.y-2}'>${label}</text><text class='news-map-count' x='${p.x}' y='${p.y+12}'>${count}건</text></g>`}).join("");
+  return `<div class='news-map'><svg viewBox='0 0 ${w} ${h}'>${lines}${circles}</svg></div>`;
+}
+function renderNewsMapArticles(items,label){
+  const list=(items||[]).slice(0,12);
+  if(!list.length)return `<div class='empty'>${esc(label||"선택 키워드")} 관련 뉴스가 없습니다.</div>`;
+  return `<div class='news-map-news'>${list.map(a=>`<div class='news'><a href='${esc(a.link)}' target='_blank' rel='noreferrer'>${esc(a.title)}</a><div class='meta'>${esc(a.source||"")} ${esc(a.published||"")} / 점수 ${a.score||0}</div></div>`).join("")}</div>`;
+}
+function showNewsForKeyword(keyword){
+  if(!LAST_NEWS_MAP)return;
+  const box=document.getElementById(LAST_NEWS_MAP.targetId);
+  if(!box)return;
+  const text=String(keyword||"");
+  const articles=text?(LAST_NEWS_MAP.articles||[]).filter(a=>(`${a.title||""} ${a.summary||""}`).includes(text)):(LAST_NEWS_MAP.articles||[]);
+  const area=box.querySelector(".news-map-articles");
+  if(area)area.innerHTML=renderNewsMapArticles(articles,text||LAST_NEWS_MAP.query);
+}
+async function loadWatchNewsMap(i,name){
+  const box=document.getElementById(`watchBody${i}`);
+  if(!box)return;
+  box.innerHTML="<div class='empty'>뉴스 연관맵을 불러오는 중...</div>";
+  try{
+    const r=await fetch(`/api/news-map?${new URLSearchParams({q:name||"",limit:"45",ts:String(Date.now())}).toString()}`);
+    const d=await r.json();
+    if(!d.ok)throw new Error(d.error||"뉴스 연관맵 로드 실패");
+    LAST_NEWS_MAP={targetId:`watchBody${i}`,query:d.query,articles:d.articles||[]};
+    box.innerHTML=`<div class='section-note'><b>${esc(d.query)} 뉴스 연관맵</b><br>오늘 확인된 뉴스 ${d.newsCount||0}건 기준입니다. 원을 누르면 해당 키워드 기사만 좁혀 봅니다.</div>${newsMapSvg(d.graph)}<div class='news-map-articles'>${renderNewsMapArticles(d.articles||[],d.query)}</div>`;
+  }catch(e){
+    box.innerHTML=`<div class='empty'>뉴스 연관맵 오류: ${esc(e.message)}</div>`;
+  }
+}
+
 loadHot(false).then(loadMember);
 </script>
 </body>
@@ -1532,6 +1631,11 @@ class Handler(BaseHTTPRequestHandler):
                 q = qs.get("q", [""])[0].strip()
                 limit = int(qs.get("limit", ["10"])[0] or 10)
                 self.send(200, json.dumps(stock_suggestions_payload(q, limit), ensure_ascii=False), "application/json; charset=utf-8")
+            elif parsed.path == "/api/news-map":
+                qs = parse_qs(parsed.query)
+                q = qs.get("q", [""])[0].strip()
+                limit = int(qs.get("limit", ["40"])[0] or 40)
+                self.send(200, json.dumps(news_map_payload(q, limit), ensure_ascii=False), "application/json; charset=utf-8")
             elif parsed.path == "/api/report-price-chart":
                 qs = parse_qs(parsed.query)
                 stock_code = qs.get("stock_code", [""])[0].strip()
