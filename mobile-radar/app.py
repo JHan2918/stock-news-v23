@@ -776,36 +776,6 @@ def industry_payload_from_db(month=""):
     }
 
 
-def industry_home_summary():
-    payload = industry_payload_from_db("")
-    if not payload.get("ok"):
-        return {}
-    best = None
-    for item in payload.get("items", []):
-        pairs = [
-            (month, growth)
-            for month, growth in zip(item.get("months") or [], item.get("monthly") or [])
-            if growth is not None
-        ]
-        if len(pairs) < 2:
-            continue
-        prev_month, prev_growth = pairs[-2]
-        latest_month, latest_growth = pairs[-1]
-        jump = float(latest_growth or 0) - float(prev_growth or 0)
-        row = {
-            "name": item.get("name") or "",
-            "reportMonth": payload.get("reportMonth") or latest_month,
-            "latestMonth": latest_month,
-            "previousMonth": prev_month,
-            "latestGrowth": float(latest_growth or 0),
-            "previousGrowth": float(prev_growth or 0),
-            "jump": jump,
-        }
-        if best is None or row["jump"] > best["jump"]:
-            best = row
-    return best or {}
-
-
 THEME_SEEDS = [
     {"key": "semiconductor", "name": "반도체/HBM", "keywords": ["HBM", "AI반도체", "메모리"], "stocks": ["삼성전자", "SK하이닉스", "한미반도체", "이오테크닉스", "원익IPS"]},
     {"key": "power", "name": "전력기기", "keywords": ["변압기", "전선", "전력망"], "stocks": ["HD현대일렉트릭", "LS ELECTRIC", "효성중공업", "제룡전기", "대한전선"]},
@@ -1000,7 +970,6 @@ def hot_payload(force=False):
         "macroHot": macro_hot,
         "macroCharts": macro_snapshot(),
         "reports": report_summary(),
-        "industryTopMover": industry_home_summary(),
         "cards": rotating_static_cards(),
         "errors": errors,
         "dbShared": bool(report_zip_path()),
@@ -1070,7 +1039,7 @@ function krwAmt(n){n=Number(n||0);const sign=n>0?"+":n<0?"-":"";const v=Math.abs
 async function loadHot(force=false){const st=document.getElementById("status");st.textContent="오늘 HOT 계산 중...";try{const r=await fetch(`/api/hot?force=${force?1:0}&ts=${Date.now()}`);const d=await r.json();if(!d.ok)throw new Error(d.error||"로드 실패");DATA=d;render();st.innerHTML=`${esc(d.today)} / 뉴스 ${d.sourceNewsCount}건 / 업데이트 ${esc(d.generatedAt)} / 공유DB ${d.dbShared?"연결":"없음"}`}catch(e){st.innerHTML=`오류: ${esc(e.message)}`}}
 function render(){document.body.classList.remove("page-mode");renderHome()}
 function ticker(rows,type){if(!rows.length)return "<div class='empty'>데이터 없음</div>";const lines=rows.slice(0,5).map((r,i)=>{const name=type==="stock"?r.stockName:(type==="report"?r.stockName:r.name||r.keyword);const val=type==="stock"||type==="macro"?`뉴스 ${r.newsCount||0}건`:(type==="report"?(r.opinion||r.firm||"리포트"):r.value||"");return `<div class='ticker-line'><span class='ticker-rank'>${i+1}</span><span>${esc(name)}</span><span class='ticker-val'>${esc(val)}</span></div>`}).join("");return `<div class='ticker'><div class='ticker-track'>${lines}${lines}</div></div><div class='hint'>눌러서 자세히 보기</div>`}
-function renderHome(){document.getElementById("stockCard").innerHTML=ticker(DATA.stockHot||[],"stock");document.getElementById("macroCard").innerHTML=ticker(DATA.macroHot||[],"macro");document.getElementById("reportCard").innerHTML="<div class='report-home'><div class='report-art'></div><div><b>증권사 리포트 확인</b><span>목표가·의견·상세 차트</span><div class='hint'>눌러서 보고서 보기</div></div></div>";document.getElementById("macroMiniCard").innerHTML="<div class='macro-home'><div class='macro-art'></div><div><b>시장 지표 흐름</b><span>지수·환율·금리·원자재</span><div class='hint'>눌러서 그래프 보기</div></div></div>";const top=DATA.industryTopMover||{};const topText=top.name?`<strong>${esc(top.name)}</strong> ${pct(top.jump||0)}p`:"수출 품목 흐름";document.getElementById("industryCard").innerHTML=`<div class='export-home'><div class='export-art'></div><div><b>산업수출데이터</b><span>전월대비 급등 1위 ${topText}</span><div class='hint'>눌러서 산업수출데이터 보기</div></div></div>`;document.getElementById("themeCard").innerHTML="<div class='theme-home'><div class='theme-art'></div><div><b>테마 흐름</b><span>상승률·거래대금·수급</span><div class='hint'>눌러서 테마 보기</div></div></div>";document.getElementById("watchCard").innerHTML=ticker(DATA.cards?.watch||[],"static");document.getElementById("stockCard").parentElement.onclick=()=>showDetail("stock");document.getElementById("macroCard").parentElement.onclick=()=>showDetail("macro");document.getElementById("reportCard").parentElement.onclick=()=>showDetail("report");document.getElementById("macroMiniCard").parentElement.onclick=()=>showDetail("macroChart");document.getElementById("industryCard").parentElement.onclick=()=>showDetail("industry");document.getElementById("themeCard").parentElement.onclick=()=>showDetail("theme");document.getElementById("watchCard").parentElement.onclick=()=>showDetail("watch")}
+function renderHome(){document.getElementById("stockCard").innerHTML=ticker(DATA.stockHot||[],"stock");document.getElementById("macroCard").innerHTML=ticker(DATA.macroHot||[],"macro");document.getElementById("reportCard").innerHTML="<div class='report-home'><div class='report-art'></div><div><b>증권사 리포트 확인</b><span>목표가·의견·상세 차트</span><div class='hint'>눌러서 보고서 보기</div></div></div>";document.getElementById("macroMiniCard").innerHTML="<div class='macro-home'><div class='macro-art'></div><div><b>시장 지표 흐름</b><span>지수·환율·금리·원자재</span><div class='hint'>눌러서 그래프 보기</div></div></div>";document.getElementById("industryCard").innerHTML="<div class='export-home'><div class='export-art'></div><div><b>산업수출데이터</b><span>품목별 수출·지역 흐름</span><div class='hint'>눌러서 산업수출데이터 보기</div></div></div>";document.getElementById("themeCard").innerHTML="<div class='theme-home'><div class='theme-art'></div><div><b>테마 흐름</b><span>상승률·거래대금·수급</span><div class='hint'>눌러서 테마 보기</div></div></div>";document.getElementById("watchCard").innerHTML=ticker(DATA.cards?.watch||[],"static");document.getElementById("stockCard").parentElement.onclick=()=>showDetail("stock");document.getElementById("macroCard").parentElement.onclick=()=>showDetail("macro");document.getElementById("reportCard").parentElement.onclick=()=>showDetail("report");document.getElementById("macroMiniCard").parentElement.onclick=()=>showDetail("macroChart");document.getElementById("industryCard").parentElement.onclick=()=>showDetail("industry");document.getElementById("themeCard").parentElement.onclick=()=>showDetail("theme");document.getElementById("watchCard").parentElement.onclick=()=>showDetail("watch")}
 function goHome(){document.body.classList.remove("page-mode");window.scrollTo({top:0,behavior:"smooth"})}
 async function showDetail(type){const title={stock:"오늘의 종목 HOT 이슈",macro:"시장·거시 HOT 이슈",macroChart:"매크로 그래프",report:"증권사 보고서",industry:"산업수출데이터",theme:"테마",watch:"관심종목"}[type]||"상세";document.getElementById("detailTitle").textContent=title;document.body.classList.add("page-mode");window.scrollTo({top:0,behavior:"smooth"});if(type==="stock")renderRows(DATA.stockHot||[],"stock");else if(type==="macro")renderRows(DATA.macroHot||[],"macro");else if(type==="macroChart")renderMacroCharts();else if(type==="report")await loadReportPage();else if(type==="industry")await loadIndustryPage();else if(type==="theme")await loadThemePage();else renderStaticRows(DATA.cards?.[type]||[],type)}
 function renderRows(rows,type){const el=document.getElementById("detailList");if(!rows.length){el.innerHTML="<div class='empty'>표시할 데이터가 없습니다.</div>";return}el.innerHTML=rows.slice(0,15).map((r,i)=>{const name=type==="stock"?r.stockName:r.keyword;const sub=type==="stock"?r.stockCode:(r.sources||[]).slice(0,2).join(", ");const chips=(r.keywords||[]).slice(0,4).map(k=>`<span class='chip'>${esc(k)}</span>`).join("");return `<div class='row' onclick='openModal("${type}",${i})'><div class='rank'>${i+1}</div><div><div class='name'>${esc(name)}</div><div class='meta'>${esc(sub)} / 뉴스 ${Number(r.newsCount||0)}건 / 점수 ${Number(r.score||0).toFixed(0)}<br>${chips}<br>${esc(r.title||"")}</div></div><div class='score'>뉴스 ${Number(r.newsCount||0)}건<br><span class='meta'>${Number(r.score||0).toFixed(0)}</span></div></div>`}).join("")}
