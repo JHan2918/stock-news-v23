@@ -146,6 +146,15 @@ def normalize_stock_code(value):
     return m.group(0) if m else ""
 
 
+def is_valid_report_stock(name, code):
+    code = normalize_stock_code(code)
+    name = str(name or "").strip()
+    if not code or not name:
+        return False
+    bad_names = {"stock", "stocks", "한경", "한국경제", "네이버", "naver", "report", "리포트", "보고서"}
+    return normalize_stock_name(name) not in {normalize_stock_name(x) for x in bad_names}
+
+
 def stock_master():
     if STOCK_CACHE["items"] is not None:
         return STOCK_CACHE["items"]
@@ -171,7 +180,7 @@ def stock_master():
                 code = normalize_stock_code(code)
                 name = str(name or "").strip()
                 norm = normalize_stock_name(name)
-                if code and name and norm not in seen:
+                if is_valid_report_stock(name, code) and norm not in seen:
                     seen.add(norm)
                     items.append({"code": code, "name": name, "count": int(cnt or 0), "norm": norm})
         except Exception:
@@ -430,7 +439,15 @@ def report_summary():
         return {"latestDate": "", "count": 0, "items": []}
     try:
         con = sqlite3.connect(db)
-        latest = con.execute("SELECT max(report_date) FROM reports WHERE report_date IS NOT NULL AND trim(report_date)!=''").fetchone()[0]
+        latest = con.execute(
+            """
+            SELECT max(report_date)
+            FROM reports
+            WHERE report_date IS NOT NULL AND trim(report_date)!=''
+              AND stock_name IS NOT NULL AND trim(stock_name)!=''
+              AND stock_code IS NOT NULL AND stock_code GLOB '*[0-9][0-9][0-9][0-9][0-9][0-9]*'
+            """
+        ).fetchone()[0]
         if not latest:
             con.close()
             return {"latestDate": "", "count": 0, "items": []}
@@ -440,6 +457,8 @@ def report_summary():
                    target_price, report_url, count(*) OVER () AS total_count
             FROM reports
             WHERE report_date=?
+              AND stock_name IS NOT NULL AND trim(stock_name)!=''
+              AND stock_code IS NOT NULL AND stock_code GLOB '*[0-9][0-9][0-9][0-9][0-9][0-9]*'
             ORDER BY
               CASE WHEN target_price IS NULL OR trim(cast(target_price AS text))='' THEN 1 ELSE 0 END,
               stock_name
@@ -451,6 +470,8 @@ def report_summary():
         items = []
         total = int(rows[0][-1]) if rows else 0
         for r in rows:
+            if not is_valid_report_stock(r[0], r[1]):
+                continue
             items.append({
                 "stockName": r[0] or "",
                 "stockCode": normalize_stock_code(r[1]),
@@ -470,9 +491,25 @@ def research_reports_payload(start="", end="", q="", limit=80):
         return {"ok": False, "error": "공유 DB를 찾지 못했습니다."}
     con = db_connect()
     today = datetime.now(KST).strftime("%Y-%m-%d")
-    latest = con.execute("SELECT MAX(report_date) FROM reports WHERE report_date<=?", (today,)).fetchone()[0] or ""
+    latest = con.execute(
+        """
+        SELECT MAX(report_date)
+        FROM reports
+        WHERE report_date<=?
+          AND stock_name IS NOT NULL AND trim(stock_name)!=''
+          AND stock_code IS NOT NULL AND stock_code GLOB '*[0-9][0-9][0-9][0-9][0-9][0-9]*'
+        """,
+        (today,),
+    ).fetchone()[0] or ""
     if not latest:
-        latest = con.execute("SELECT MAX(report_date) FROM reports").fetchone()[0] or ""
+        latest = con.execute(
+            """
+            SELECT MAX(report_date)
+            FROM reports
+            WHERE stock_name IS NOT NULL AND trim(stock_name)!=''
+              AND stock_code IS NOT NULL AND stock_code GLOB '*[0-9][0-9][0-9][0-9][0-9][0-9]*'
+            """
+        ).fetchone()[0] or ""
     if not start and not end:
         start = latest
         end = latest
@@ -494,6 +531,8 @@ def research_reports_payload(start="", end="", q="", limit=80):
         like = "%" + q + "%"
         where.append("(stock_name LIKE ? OR stock_code LIKE ?)")
         args.extend([like, like])
+    where.append("stock_name IS NOT NULL AND trim(stock_name)!=''")
+    where.append("stock_code IS NOT NULL AND stock_code GLOB '*[0-9][0-9][0-9][0-9][0-9][0-9]*'")
     where_sql = (" WHERE " + " AND ".join(where)) if where else ""
     reports = db_rows(
         con,
@@ -517,6 +556,7 @@ def research_reports_payload(start="", end="", q="", limit=80):
         for row in db_rows(con, f"SELECT report_id,keyword,keyword_type FROM report_keywords WHERE report_id IN ({ph}) ORDER BY keyword_id", ids):
             keywords_by.setdefault(row["report_id"], []).append(row)
     con.close()
+    reports = [r for r in reports if is_valid_report_stock(r.get("stock_name"), r.get("stock_code"))]
     for r in reports:
         r["reasons"] = reasons_by.get(r["report_id"], [])[:5]
         r["keywords"] = keywords_by.get(r["report_id"], [])[:8]
