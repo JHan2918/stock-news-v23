@@ -1918,6 +1918,7 @@ class Handler(BaseHTTPRequestHandler):
                 if not name:
                     return self.send_json(400, {"ok": False, "error": "이름을 입력해주세요."})
                 con = member_connect()
+                selected_stocks = []
                 try:
                     con.execute(
                         "UPDATE members SET name=?, phone=?, email=?, interests=? WHERE member_id=?",
