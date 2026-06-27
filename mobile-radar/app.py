@@ -282,18 +282,27 @@ def extracted_report_db_path():
     if not zp:
         return ""
     out = os.path.join(tempfile.gettempdir(), "mobile_radar_report_reports.db")
-    if os.path.exists(out) and os.path.getmtime(out) >= os.path.getmtime(zp):
+    zip_sig = f"{int(os.path.getmtime(zp))}_{os.path.getsize(zp)}"
+    out = os.path.join(tempfile.gettempdir(), f"mobile_radar_report_reports_{zip_sig}.db")
+    if os.path.exists(out) and os.path.getsize(out) > 0:
         return out
+    tmp = out + ".tmp"
+    if os.path.exists(tmp):
+        try:
+            os.remove(tmp)
+        except OSError:
+            pass
     with zipfile.ZipFile(zp, "r") as zf:
         names = [n for n in zf.namelist() if n.endswith(".db")]
         if not names:
             return ""
-        with zf.open(names[0]) as src, open(out, "wb") as dst:
+        with zf.open(names[0]) as src, open(tmp, "wb") as dst:
             while True:
                 chunk = src.read(1024 * 1024)
                 if not chunk:
                     break
                 dst.write(chunk)
+    os.replace(tmp, out)
     return out
 
 
@@ -1488,7 +1497,7 @@ class Handler(BaseHTTPRequestHandler):
             return {k: v[0] if v else "" for k, v in parse_qs(raw).items()}
 
     def auth_required(self, parsed):
-        if parsed.path in ("/login", "/api/auth/login", "/api/auth/register", "/api/auth/guest"):
+        if parsed.path in ("/login", "/api/auth/login", "/api/auth/register", "/api/auth/guest", "/api/auth/logout"):
             return False
         if parsed.path.startswith("/static/"):
             return False
@@ -1551,7 +1560,7 @@ class Handler(BaseHTTPRequestHandler):
                 return self.send_json(
                     200,
                     {"ok": True},
-                    {"Set-Cookie": f"mr_session={token}; Path=/; HttpOnly; SameSite=Lax; Max-Age={30*24*3600}"},
+                    {"Set-Cookie": [f"mr_session={token}; Path=/; HttpOnly; SameSite=Lax; Max-Age={30*24*3600}", "mr_guest=; Path=/; Max-Age=0; SameSite=Lax"]},
                 )
             if parsed.path == "/api/auth/login":
                 username = str(data.get("username") or "").strip()
@@ -1568,7 +1577,7 @@ class Handler(BaseHTTPRequestHandler):
                 cookie = f"mr_session={token}; Path=/; HttpOnly; SameSite=Lax"
                 if remember:
                     cookie += f"; Max-Age={30*24*3600}"
-                return self.send_json(200, {"ok": True}, {"Set-Cookie": cookie})
+                return self.send_json(200, {"ok": True}, {"Set-Cookie": [cookie, "mr_guest=; Path=/; Max-Age=0; SameSite=Lax"]})
             if parsed.path == "/api/auth/guest":
                 return self.send_json(200, {"ok": True, "guest": True}, {"Set-Cookie": "mr_guest=1; Path=/; SameSite=Lax; Max-Age=86400"})
             if parsed.path == "/api/auth/logout":
@@ -1625,7 +1634,7 @@ class Handler(BaseHTTPRequestHandler):
                     return self.send_json(401, {"ok": False, "error": "로그인이 필요합니다."})
                 return self.send(200, AUTH_HTML)
             if parsed.path == "/login":
-                return self.send(200, HTML if (member or guest) else AUTH_HTML)
+                return self.send(200, AUTH_HTML, headers={"Set-Cookie": ["mr_session=; Path=/; Max-Age=0; HttpOnly; SameSite=Lax", "mr_guest=; Path=/; Max-Age=0; SameSite=Lax"]})
             if parsed.path in ("/static/report-card-d.png", "/static/macro-card.png", "/static/export-card.png", "/static/theme-card.png"):
                 filename = os.path.basename(parsed.path)
                 path = os.path.join(os.path.dirname(__file__), "static", filename)
