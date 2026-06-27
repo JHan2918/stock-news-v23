@@ -70,7 +70,11 @@ def member_db_path():
     env = os.environ.get("MEMBER_DB_PATH")
     if env:
         return os.path.abspath(env)
-    base = os.environ.get("DATA_DIR") or os.path.join(app_dir(), "data")
+    base = os.environ.get("MEMBER_DATA_DIR")
+    if not base and os.environ.get("RENDER"):
+        base = "/var/data"
+    if not base:
+        base = os.path.join(app_dir(), "data")
     return os.path.abspath(os.path.join(base, "members.db"))
 
 
