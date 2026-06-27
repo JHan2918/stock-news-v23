@@ -145,6 +145,44 @@ def member_connect():
         )
         """
     )
+    con.execute(
+        """
+        CREATE TABLE IF NOT EXISTS stock_analysis_profile (
+            stock_code TEXT PRIMARY KEY,
+            stock_name TEXT,
+            updated_at TEXT,
+            provider TEXT,
+            status TEXT,
+            current_price REAL,
+            market_cap REAL,
+            per REAL,
+            pbr REAL,
+            eps REAL,
+            bps REAL,
+            dps REAL,
+            dividend_yield REAL,
+            growth_score REAL,
+            profit_score REAL,
+            valuation_score REAL,
+            summary TEXT
+        )
+        """
+    )
+    con.execute(
+        """
+        CREATE TABLE IF NOT EXISTS stock_quarter_financials (
+            stock_code TEXT NOT NULL,
+            period TEXT NOT NULL,
+            revenue REAL,
+            operating_profit REAL,
+            operating_margin REAL,
+            net_income REAL,
+            source TEXT,
+            updated_at TEXT,
+            PRIMARY KEY(stock_code, period)
+        )
+        """
+    )
     ensure_default_members(con)
     con.commit()
     return con
@@ -999,6 +1037,228 @@ def report_price_chart_payload(stock_code="", report_date="", period="6m", repor
     }
 
 
+def text_number(value):
+    text = unescape(strip_tags(str(value or ""))).replace("\xa0", " ")
+    text = re.sub(r"[,\s]", "", text)
+    text = text.replace("N/A", "")
+    if text in ("", "-", "--"):
+        return None
+    m = re.search(r"[-+]?\d+(?:\.\d+)?", text)
+    if not m:
+        return None
+    try:
+        return float(m.group(0))
+    except Exception:
+        return None
+
+
+def fetch_naver_stock_metrics(code):
+    code = normalize_stock_code(code)
+    if not code:
+        return {}
+    url = f"https://finance.naver.com/item/main.naver?code={code}"
+    try:
+        raw = http_get(url, timeout=10)
+        try:
+            html = raw.decode("euc-kr", errors="ignore")
+        except Exception:
+            html = raw.decode("utf-8", errors="ignore")
+    except Exception:
+        return {}
+    metrics = {}
+    id_map = {
+        "current_price": "_nowVal",
+        "per": "_per",
+        "eps": "_eps",
+        "pbr": "_pbr",
+        "market_cap": "_market_sum",
+    }
+    for key, html_id in id_map.items():
+        m = re.search(rf'id=["\']{re.escape(html_id)}["\'][^>]*>(.*?)</', html, re.I | re.S)
+        if m:
+            metrics[key] = text_number(m.group(1))
+    label_map = {
+        "bps": r"BPS",
+        "dps": r"주당배당금|DPS",
+        "dividend_yield": r"배당수익률",
+    }
+    plain = re.sub(r"\s+", " ", html)
+    for key, label in label_map.items():
+        m = re.search(label + r".{0,180}?([-+]?\d[\d,]*(?:\.\d+)?)", plain, re.I | re.S)
+        if m:
+            metrics[key] = text_number(m.group(1))
+    if metrics.get("market_cap"):
+        metrics["market_cap"] = metrics["market_cap"] * 100000000
+    return metrics
+
+
+def clean_cell(value):
+    value = strip_tags(value)
+    value = unescape(value).replace("\xa0", " ")
+    return re.sub(r"\s+", " ", value).strip()
+
+
+def fetch_fnguide_quarters(code):
+    code = normalize_stock_code(code)
+    if not code:
+        return []
+    url = f"https://comp.fnguide.com/SVO2/ASP/SVD_Main.asp?pGB=1&gicode=A{code}&cID=&MenuYn=Y&ReportGB=&NewMenuID=101&stkGb=701"
+    try:
+        raw = http_get(url, timeout=12)
+        try:
+            html = raw.decode("utf-8", errors="ignore")
+        except Exception:
+            html = raw.decode("euc-kr", errors="ignore")
+    except Exception:
+        return []
+    table_match = re.search(r'<table[^>]+id=["\']highlight_D_Q["\'][^>]*>(.*?)</table>', html, re.I | re.S)
+    if not table_match:
+        return []
+    table = table_match.group(1)
+    headers = [clean_cell(x) for x in re.findall(r"<th[^>]*>(.*?)</th>", table, re.I | re.S)]
+    periods = []
+    for h in headers:
+        m = re.search(r"(20\d{2})[./-](\d{2})", h)
+        if m:
+            q = (int(m.group(2)) - 1) // 3 + 1
+            periods.append(f"{m.group(1)}Q{q}")
+    metrics = {}
+    for row_html in re.findall(r"<tr[^>]*>(.*?)</tr>", table, re.I | re.S):
+        cells = [clean_cell(x) for x in re.findall(r"<t[hd][^>]*>(.*?)</t[hd]>", row_html, re.I | re.S)]
+        if len(cells) < 2:
+            continue
+        label = cells[0]
+        nums = cells[1:]
+        if "매출액" in label:
+            metrics["revenue"] = nums
+        elif "영업이익" in label and "률" not in label:
+            metrics["operating_profit"] = nums
+        elif "당기순이익" in label or "순이익" in label:
+            metrics["net_income"] = nums
+    out = []
+    for idx, period in enumerate(periods[-16:]):
+        src_idx = len(periods) - len(periods[-16:]) + idx
+        revenue = text_number((metrics.get("revenue") or [None])[src_idx] if src_idx < len(metrics.get("revenue", [])) else None)
+        op = text_number((metrics.get("operating_profit") or [None])[src_idx] if src_idx < len(metrics.get("operating_profit", [])) else None)
+        ni = text_number((metrics.get("net_income") or [None])[src_idx] if src_idx < len(metrics.get("net_income", [])) else None)
+        if revenue is None and op is None and ni is None:
+            continue
+        margin = round(op / revenue * 100, 2) if revenue and op is not None else None
+        out.append({"period": period, "revenue": revenue, "operating_profit": op, "operating_margin": margin, "net_income": ni})
+    return out
+
+
+def score_stock_analysis(metrics, quarters):
+    revenues = [q.get("revenue") for q in quarters if q.get("revenue") is not None]
+    margins = [q.get("operating_margin") for q in quarters if q.get("operating_margin") is not None]
+    growth_score = None
+    if len(revenues) >= 5 and revenues[-5]:
+        growth_score = max(0, min(100, 50 + ((revenues[-1] - revenues[-5]) / revenues[-5] * 100)))
+    profit_score = None
+    if margins:
+        profit_score = max(0, min(100, 45 + sum(margins[-4:]) / min(len(margins), 4) * 2))
+    valuation_score = None
+    per = metrics.get("per")
+    pbr = metrics.get("pbr")
+    if per or pbr:
+        valuation_score = 50
+        if per and per > 0:
+            valuation_score += 20 if per < 12 else 8 if per < 22 else -8
+        if pbr and pbr > 0:
+            valuation_score += 15 if pbr < 1.2 else 5 if pbr < 2.5 else -7
+        valuation_score = max(0, min(100, valuation_score))
+    return growth_score, profit_score, valuation_score
+
+
+def stock_analysis_summary(name, metrics, quarters, scores):
+    parts = []
+    growth_score, profit_score, valuation_score = scores
+    if quarters:
+        last = quarters[-1]
+        parts.append(f"최근 분기 매출 {last.get('revenue') or '-'}억원, 영업이익 {last.get('operating_profit') or '-'}억원 기준으로 추이를 봅니다.")
+    else:
+        parts.append("분기 재무 데이터는 원천 페이지 연결 상태에 따라 갱신됩니다.")
+    if metrics.get("per") or metrics.get("pbr"):
+        parts.append(f"PER {metrics.get('per') or '-'}, PBR {metrics.get('pbr') or '-'}로 밸류에이션 위치를 확인합니다.")
+    if growth_score is not None:
+        parts.append("매출 성장 점수는 최근 1년 전 대비 매출 변화율을 중심으로 계산했습니다.")
+    if profit_score is not None:
+        parts.append("수익성 점수는 최근 분기 영업이익률 흐름을 반영했습니다.")
+    if valuation_score is not None:
+        parts.append("밸류에이션 점수는 PER/PBR이 과도하게 높거나 낮은지를 보조적으로 평가합니다.")
+    return " ".join(parts)
+
+
+def ensure_stock_analysis_cache(stock_code, stock_name="", force=False):
+    code = normalize_stock_code(stock_code)
+    if not code:
+        return {"ok": False, "error": "종목코드가 필요합니다."}
+    con = member_connect()
+    now = datetime.now(KST)
+    try:
+        row = con.execute("SELECT * FROM stock_analysis_profile WHERE stock_code=?", (code,)).fetchone()
+        if row and not force:
+            updated = None
+            try:
+                updated = datetime.strptime(row["updated_at"], "%Y-%m-%d %H:%M:%S").replace(tzinfo=KST)
+            except Exception:
+                updated = None
+            if updated and (now - updated) < timedelta(hours=24):
+                return stock_analysis_payload_from_con(con, code)
+        metrics = fetch_naver_stock_metrics(code)
+        quarters = fetch_fnguide_quarters(code)
+        scores = score_stock_analysis(metrics, quarters)
+        summary = stock_analysis_summary(stock_name or code, metrics, quarters, scores)
+        status = "updated" if metrics or quarters else "source_unavailable"
+        provider = "naver_finance,fnguide"
+        con.execute(
+            """
+            INSERT OR REPLACE INTO stock_analysis_profile
+            (stock_code,stock_name,updated_at,provider,status,current_price,market_cap,per,pbr,eps,bps,dps,dividend_yield,growth_score,profit_score,valuation_score,summary)
+            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+            """,
+            (
+                code, stock_name or code, now.strftime("%Y-%m-%d %H:%M:%S"), provider, status,
+                metrics.get("current_price"), metrics.get("market_cap"), metrics.get("per"), metrics.get("pbr"),
+                metrics.get("eps"), metrics.get("bps"), metrics.get("dps"), metrics.get("dividend_yield"),
+                scores[0], scores[1], scores[2], summary,
+            ),
+        )
+        for q in quarters:
+            con.execute(
+                """
+                INSERT OR REPLACE INTO stock_quarter_financials
+                (stock_code,period,revenue,operating_profit,operating_margin,net_income,source,updated_at)
+                VALUES (?,?,?,?,?,?,?,?)
+                """,
+                (code, q.get("period"), q.get("revenue"), q.get("operating_profit"), q.get("operating_margin"), q.get("net_income"), "fnguide", now.strftime("%Y-%m-%d %H:%M:%S")),
+            )
+        con.commit()
+        return stock_analysis_payload_from_con(con, code)
+    finally:
+        con.close()
+
+
+def stock_analysis_payload_from_con(con, code):
+    row = con.execute("SELECT * FROM stock_analysis_profile WHERE stock_code=?", (code,)).fetchone()
+    if not row:
+        return {"ok": False, "error": "분석 데이터가 아직 없습니다."}
+    quarters = db_rows(con, "SELECT * FROM stock_quarter_financials WHERE stock_code=? ORDER BY period", (code,))
+    return {"ok": True, "profile": dict(row), "quarters": quarters}
+
+
+def stock_analysis_payload(stock_code="", stock_name="", force=False):
+    return ensure_stock_analysis_cache(stock_code, stock_name, force)
+
+
+def warm_stock_analysis(stocks):
+    for stock in stocks or []:
+        try:
+            ensure_stock_analysis_cache(stock.get("code"), stock.get("name"))
+        except Exception:
+            pass
+
+
 def industry_payload_from_db(month=""):
     if not report_db_exists():
         return {"ok": False, "error": "공유 DB를 찾지 못했습니다."}
@@ -1438,8 +1698,13 @@ function closeModal(){document.getElementById("modal").classList.add("hidden")}
 async function logout(){try{await fetch('/api/auth/logout',{method:'POST'});location.href='/login'}catch(e){location.href='/login'}}
 async function loadMember(){try{const r=await fetch("/api/member/me?ts="+Date.now());const d=await r.json();MEMBER_DATA=d;if(d.ok&&d.authenticated){renderMemberWatch(d)}}catch(e){}}
 function renderMemberWatch(d){const el=document.getElementById("watchCard");if(!el)return;const rows=d.watchlist||[];if(!rows.length){el.innerHTML="<div class='empty'>관심종목이 아직 없습니다.</div><div class='hint'>설정에서 관심종목을 등록하세요</div>";return}el.innerHTML=rows.map((r,i)=>`<div class='ticker-line'><span class='ticker-rank'>${i+1}</span><span>${esc(r.name)}</span><span class='ticker-val'>${esc(r.code||"")}</span></div>`).join("")+`<div class='hint'>뉴스·보고서·주가·수급 보기</div>`}
-function renderWatchDashboard(){const el=document.getElementById("detailList");const d=MEMBER_DATA||{};if(!d.authenticated){el.innerHTML="<div class='section-note'>비회원 체험 중입니다. 관심종목 대시보드는 회원가입/로그인 후 사용할 수 있습니다.</div>";return}const rows=d.watchlist||[];if(!rows.length){el.innerHTML="<div class='empty'>관심종목이 없습니다. 상단 설정에서 관심종목 3개를 등록하세요.</div>";return}el.innerHTML=`<div class='section-note'><b>${esc(d.member?.name||"회원")}님의 관심종목</b><br>각 종목의 뉴스, 최근 보고서, 주가와 외국인/기관 수급 흐름을 한 화면에서 봅니다.</div>`+rows.map((r,i)=>`<div class='watch-stock' id='watchStock${i}'><h3>${i+1}. ${esc(r.name)} <span class='meta'>${esc(r.code||"")}</span></h3><div class='watch-actions'><button onclick='loadWatchNewsMap(${i},"${esc(r.name||"")}")'>뉴스 연관맵</button><button onclick='loadWatchStock(${i},"${esc(r.code||"")}","${esc(r.name||"")}")'>주가·수급 새로고침</button></div><div id='watchBody${i}'><div class='empty'>데이터를 불러오는 중...</div></div></div>`).join("");rows.forEach((r,i)=>loadWatchStock(i,r.code||"",r.name||""))}
+function renderWatchDashboard(){const el=document.getElementById("detailList");const d=MEMBER_DATA||{};if(!d.authenticated){el.innerHTML="<div class='section-note'>비회원 체험 중입니다. 관심종목 대시보드는 회원가입/로그인 후 사용할 수 있습니다.</div>";return}const rows=d.watchlist||[];if(!rows.length){el.innerHTML="<div class='empty'>관심종목이 없습니다. 상단 설정에서 관심종목 3개를 등록하세요.</div>";return}el.innerHTML=`<div class='section-note'><b>${esc(d.member?.name||"회원")}님의 관심종목</b><br>각 종목의 뉴스, 최근 보고서, 주가와 외국인/기관 수급 흐름을 한 화면에서 봅니다.</div>`+rows.map((r,i)=>`<div class='watch-stock' id='watchStock${i}'><h3>${i+1}. ${esc(r.name)} <span class='meta'>${esc(r.code||"")}</span></h3><div class='watch-actions'><button onclick='loadWatchNewsMap(${i},"${esc(r.name||"")}")'>뉴스 연관맵</button><button onclick='loadWatchStock(${i},"${esc(r.code||"")}","${esc(r.name||"")}")'>주가·수급 새로고침</button><button onclick='loadStockAnalysis(${i},"${esc(r.code||"")}","${esc(r.name||"")}")'>종목분석</button></div><div id='watchBody${i}'><div class='empty'>데이터를 불러오는 중...</div></div></div>`).join("");rows.forEach((r,i)=>loadWatchStock(i,r.code||"",r.name||""))}
 async function loadWatchStock(i,code,name){const box=document.getElementById(`watchBody${i}`);if(!box)return;box.innerHTML="<div class='empty'>주가·수급·보고서를 불러오는 중...</div>";try{const chartReq=fetch(`/api/report-price-chart?${new URLSearchParams({stock_code:code||"",period:"3m",ts:String(Date.now())}).toString()}`).then(r=>r.json());const reportReq=fetch(`/api/research-reports?${new URLSearchParams({q:code||name||"",limit:"3",ts:String(Date.now())}).toString()}`).then(r=>r.json());const [chart,reports]=await Promise.all([chartReq,reportReq]);const reportRows=(reports.reports||[]).slice(0,3);const reportHtml=reportRows.length?reportRows.map(r=>`<div class='meta'>${esc(r.report_date)} / ${esc(r.securities_firm||"")} / ${esc(r.investment_opinion||"")} / 목표가 ${r.target_price?num(r.target_price)+"원":"-"}<br>${esc(r.title||"")}</div>`).join(""):"<div class='meta'>최근 보고서가 없습니다.</div>";box.innerHTML=`<div class='section-note'><b>최근 보고서</b>${reportHtml}</div><div class='meta'>주가 흐름</div>${priceTargetSvg(chart.closeSeries||[],chart.targetSeries||[])}<div class='meta'>외국인/기관 순매수</div>${flowSvg(chart.flowSeries||[])}`}catch(e){box.innerHTML=`<div class='empty'>관심종목 데이터 오류: ${esc(e.message)}</div>`}}
+async function loadStockAnalysis(i,code,name){const box=document.getElementById(`watchBody${i}`);if(!box)return;box.innerHTML="<div class='empty'>종목분석 DB를 확인하는 중...</div>";try{const d=await apiJson(`/api/stock-analysis?${new URLSearchParams({stock_code:code||"",stock_name:name||"",ts:String(Date.now())}).toString()}`);box.innerHTML=stockAnalysisHtml(d)}catch(e){box.innerHTML=`<div class='empty'>종목분석 오류: ${esc(e.message)}</div>`}}
+function valOrDash(v,suffix=""){return v===null||v===undefined||v===""?"-":`${num(v)}${suffix}`}
+function stockAnalysisHtml(d){const p=d.profile||{};const q=d.quarters||[];const score=(v)=>v===null||v===undefined?"-":Number(v).toFixed(0);return `<div class='section-note'><b>${esc(p.stock_name||"종목분석")}</b><br>업데이트 ${esc(p.updated_at||"-")} / 원천 ${esc(p.provider||"-")}<br>${esc(p.summary||"분석 데이터가 아직 충분하지 않습니다.")}</div><div class='metric-grid'><div class='metric'><b>${valOrDash(p.current_price,"원")}</b><span>현재가</span></div><div class='metric'><b>${valOrDash(p.per,"배")}</b><span>PER</span></div><div class='metric'><b>${valOrDash(p.pbr,"배")}</b><span>PBR</span></div><div class='metric'><b>${valOrDash(p.eps,"원")}</b><span>EPS</span></div><div class='metric'><b>${valOrDash(p.bps,"원")}</b><span>BPS</span></div><div class='metric'><b>${valOrDash(p.dividend_yield,"%")}</b><span>배당수익률</span></div></div><div class='chart-summary'><div class='chart-pill'><span>성장</span><b>${score(p.growth_score)}</b></div><div class='chart-pill'><span>수익성</span><b>${score(p.profit_score)}</b></div><div class='chart-pill'><span>밸류</span><b>${score(p.valuation_score)}</b></div></div><div class='meta'>분기 매출·영업이익 추이</div>${quarterFinancialSvg(q)}<div class='section-note'><b>분기 데이터</b>${quarterTable(q)}</div>`}
+function quarterTable(rows){if(!rows.length)return "<div class='empty'>분기 재무 데이터가 아직 없습니다. 원천 페이지가 열리면 자동으로 채워집니다.</div>";return `<table class='industry-stat-table'><thead><tr><th>분기</th><th>매출</th><th>영업이익</th><th>영업이익률</th></tr></thead><tbody>${rows.slice(-12).map(r=>`<tr><td>${esc(r.period)}</td><td>${r.revenue==null?"-":num(r.revenue)+"억"}</td><td>${r.operating_profit==null?"-":num(r.operating_profit)+"억"}</td><td>${r.operating_margin==null?"-":Number(r.operating_margin).toFixed(1)+"%"}</td></tr>`).join("")}</tbody></table>`}
+function quarterFinancialSvg(rows){rows=(rows||[]).filter(r=>r.revenue!=null||r.operating_profit!=null).slice(-12);if(!rows.length)return "<div class='empty'>그릴 수 있는 분기 재무 데이터가 없습니다.</div>";const w=360,h=220,l=34,r=24,t=24,b=36;const rev=rows.map(x=>Number(x.revenue||0));const op=rows.map(x=>Number(x.operating_profit||0));const max=Math.max(...rev,...op.map(Math.abs),1);const x=i=>rows.length>1?l+i*(w-l-r)/(rows.length-1):w/2;const y=v=>h-b-(Number(v||0)/max)*(h-t-b);const barW=Math.max(8,(w-l-r)/rows.length*.46);const bars=rows.map((row,i)=>{const x0=x(i)-barW/2;return `<rect x='${x0}' y='${y(row.revenue||0)}' width='${barW}' height='${h-b-y(row.revenue||0)}' fill='#315d92' opacity='.72'></rect>`}).join("");const line=rows.map((row,i)=>`${x(i)},${y(row.operating_profit||0)}`).join(" ");const last=rows[rows.length-1];const grid=[0,.25,.5,.75,1].map(v=>{const yy=t+v*(h-t-b);return `<line x1='${l}' y1='${yy}' x2='${w-r}' y2='${yy}' stroke='#1f2b38'></line>`}).join("");return `<svg class='detail-chart' viewBox='0 0 ${w} ${h}'>${grid}${bars}<polyline points='${line}' fill='none' stroke='#8aff8a' stroke-width='2.7' stroke-linejoin='round'></polyline><text x='${l}' y='15' fill='#7db1ff' font-size='10'>매출</text><text x='${l+34}' y='15' fill='#8aff8a' font-size='10'>영업이익</text><text x='${w-r}' y='${Math.max(18,y(last.operating_profit||0)-6)}' fill='#8aff8a' font-size='10' text-anchor='end'>${last.operating_profit==null?"-":num(last.operating_profit)+"억"}</text><text x='${l}' y='${h-10}' fill='#7f91a3' font-size='9'>${esc(rows[0].period||"")}</text><text x='${w-r}' y='${h-10}' fill='#7f91a3' font-size='9' text-anchor='end'>${esc(last.period||"")}</text></svg>`}
 function renderMemberPage(){const el=document.getElementById("detailList");const d=MEMBER_DATA||{};if(!d.authenticated){el.innerHTML="<div class='section-note'>비회원 체험 중입니다. 관심종목 저장은 회원가입/로그인 후 사용할 수 있습니다.</div>";return}const m=d.member||{};const w=d.watchlist||[];el.innerHTML=`<div class='section-note'><b>${esc(m.name||"회원")}</b><br>아이디 ${esc(m.username||"")} / 이메일 ${esc(m.email||"-")}<br>관심분야 ${esc(m.interests||"-")}</div><form class='member-form' onsubmit='saveMember(event)'><label>아이디<input class='readonly' name='username' value='${esc(m.username||"")}' readonly></label><label>이름<input name='name' value='${esc(m.name||"")}' required></label><label>전화번호<input name='phone' value='${esc(m.phone||"")}'></label><label>이메일<input name='email' type='email' value='${esc(m.email||"")}'></label><label class='full'>관심분야<textarea name='interests'>${esc(m.interests||"")}</textarea></label><label>관심종목 1<input name='stock1' value='${esc(w[0]?.name||w[0]?.code||"")}' placeholder='삼성전자 또는 005930'></label><label>관심종목 2<input name='stock2' value='${esc(w[1]?.name||w[1]?.code||"")}' placeholder='SK하이닉스'></label><label class='full'>관심종목 3<input name='stock3' value='${esc(w[2]?.name||w[2]?.code||"")}' placeholder='현대차'></label><div id='memberSaveMsg' class='save-msg'></div><button>정보 저장</button></form>`}
 async function saveMember(ev){ev.preventDefault();const msg=document.getElementById("memberSaveMsg");msg.textContent="저장 중...";try{const data=Object.fromEntries(new FormData(ev.target).entries());const r=await fetch("/api/member/update",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(data)});const d=await r.json();if(!r.ok||!d.ok)throw new Error(d.error||"저장 실패");MEMBER_DATA=d;renderMemberWatch(d);renderMemberPage();document.getElementById("memberSaveMsg").textContent="저장 완료"}catch(e){msg.textContent=e.message}}
 
@@ -1546,6 +1811,7 @@ class Handler(BaseHTTPRequestHandler):
             "/api/export-report",
             "/api/themes",
             "/api/theme-stock-chart",
+            "/api/stock-analysis",
         }
         if parsed.path in public_api_paths:
             return False
@@ -1567,6 +1833,7 @@ class Handler(BaseHTTPRequestHandler):
                     return self.send_json(400, {"ok": False, "error": "이름을 입력해주세요."})
                 salt, pw_hash = hash_password(password)
                 con = member_connect()
+                selected_stocks = []
                 try:
                     cur = con.execute(
                         """
@@ -1588,6 +1855,7 @@ class Handler(BaseHTTPRequestHandler):
                     for idx, raw in enumerate(stocks, 1):
                         stock = resolve_watch_stock(raw)
                         if stock:
+                            selected_stocks.append(stock)
                             con.execute(
                                 """
                                 INSERT OR REPLACE INTO member_watchlist(member_id, stock_name, stock_code, sort_order)
@@ -1604,6 +1872,7 @@ class Handler(BaseHTTPRequestHandler):
                         con.close()
                     except Exception:
                         pass
+                warm_stock_analysis(selected_stocks)
                 token, expires = make_session(member_id)
                 return self.send_json(
                     200,
@@ -1615,6 +1884,7 @@ class Handler(BaseHTTPRequestHandler):
                 password = str(data.get("password") or "")
                 remember = bool(data.get("remember", True))
                 con = member_connect()
+                selected_stocks = []
                 try:
                     row = con.execute("SELECT * FROM members WHERE username=?", (username,)).fetchone()
                 finally:
@@ -1655,6 +1925,7 @@ class Handler(BaseHTTPRequestHandler):
                     for idx, raw in enumerate([data.get("stock1"), data.get("stock2"), data.get("stock3")], 1):
                         stock = resolve_watch_stock(raw)
                         if stock:
+                            selected_stocks.append(stock)
                             con.execute(
                                 """
                                 INSERT INTO member_watchlist(member_id, stock_name, stock_code, sort_order)
@@ -1665,6 +1936,7 @@ class Handler(BaseHTTPRequestHandler):
                     con.commit()
                 finally:
                     con.close()
+                warm_stock_analysis(selected_stocks)
                 updated = current_member(self)
                 return self.send_json(200, member_payload(updated))
             return self.send_json(404, {"ok": False, "error": "not found"})
@@ -1720,6 +1992,12 @@ class Handler(BaseHTTPRequestHandler):
                 report_id = qs.get("report_id", [""])[0].strip()
                 period = qs.get("period", ["6m"])[0].strip()
                 self.send(200, json.dumps(report_price_chart_payload(stock_code, report_date, period, report_id), ensure_ascii=False), "application/json; charset=utf-8")
+            elif parsed.path == "/api/stock-analysis":
+                qs = parse_qs(parsed.query)
+                stock_code = qs.get("stock_code", [""])[0].strip()
+                stock_name = qs.get("stock_name", [""])[0].strip()
+                force = qs.get("force", ["0"])[0] == "1"
+                self.send(200, json.dumps(stock_analysis_payload(stock_code, stock_name, force), ensure_ascii=False), "application/json; charset=utf-8")
             elif parsed.path == "/api/export-report":
                 qs = parse_qs(parsed.query)
                 month = qs.get("month", [""])[0].strip()
