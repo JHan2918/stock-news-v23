@@ -1537,6 +1537,18 @@ class Handler(BaseHTTPRequestHandler):
             return False
         if parsed.path.startswith("/static/"):
             return False
+        public_api_paths = {
+            "/api/hot",
+            "/api/research-reports",
+            "/api/stocks",
+            "/api/news-map",
+            "/api/report-price-chart",
+            "/api/export-report",
+            "/api/themes",
+            "/api/theme-stock-chart",
+        }
+        if parsed.path in public_api_paths:
+            return False
         return True
 
     def do_POST(self):
