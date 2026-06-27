@@ -206,18 +206,21 @@ def ensure_default_members(con):
         {"username": "login", "password": "1234", "name": "임시회원", "phone": "", "email": "", "interests": "오픈베타 체험"},
     ]
     for item in defaults:
-        row = con.execute("SELECT member_id FROM members WHERE username=?", (item["username"],)).fetchone()
-        if row:
-            continue
         salt, pw_hash = hash_password(item["password"])
-        cur = con.execute(
+        con.execute(
             """
-            INSERT INTO members(username,password_hash,salt,name,phone,email,interests)
+            INSERT OR IGNORE INTO members(username,password_hash,salt,name,phone,email,interests)
             VALUES (?, ?, ?, ?, ?, ?, ?)
             """,
             (item["username"], pw_hash, salt, item["name"], item["phone"], item["email"], item["interests"]),
         )
-        member_id = cur.lastrowid
+        row = con.execute("SELECT member_id FROM members WHERE username=?", (item["username"],)).fetchone()
+        if not row:
+            continue
+        member_id = row["member_id"]
+        watch_count = con.execute("SELECT COUNT(*) FROM member_watchlist WHERE member_id=?", (member_id,)).fetchone()[0]
+        if watch_count:
+            continue
         for idx, raw in enumerate(["삼성전자", "SK하이닉스", "현대차"], 1):
             stock = resolve_watch_stock(raw)
             if stock:
