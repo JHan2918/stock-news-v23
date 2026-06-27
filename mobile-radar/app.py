@@ -59,6 +59,8 @@ DEFAULT_STOCKS = [
 
 HOT_CACHE = {"loaded_at": 0, "data": None}
 STOCK_CACHE = {"items": None}
+MEMBER_DB_READY = False
+MEMBER_DB_LOCK = threading.Lock()
 
 
 def app_dir():
@@ -100,10 +102,28 @@ def member_db_path():
 
 
 def member_connect():
+    global MEMBER_DB_READY
     db = member_db_path()
     os.makedirs(os.path.dirname(db), exist_ok=True)
-    con = sqlite3.connect(db)
+    con = sqlite3.connect(db, timeout=30)
     con.row_factory = sqlite3.Row
+    con.execute("PRAGMA busy_timeout=30000")
+    try:
+        con.execute("PRAGMA journal_mode=WAL")
+        con.execute("PRAGMA synchronous=NORMAL")
+    except sqlite3.DatabaseError:
+        pass
+    if MEMBER_DB_READY:
+        return con
+    with MEMBER_DB_LOCK:
+        if MEMBER_DB_READY:
+            return con
+        init_member_db(con)
+        MEMBER_DB_READY = True
+    return con
+
+
+def init_member_db(con):
     con.execute(
         """
         CREATE TABLE IF NOT EXISTS members (
@@ -185,7 +205,6 @@ def member_connect():
     )
     ensure_default_members(con)
     con.commit()
-    return con
 
 
 def hash_password(password, salt=""):
@@ -254,7 +273,7 @@ def current_member(handler):
     try:
         row = con.execute(
             """
-            SELECT m.member_id, m.username, m.name, m.phone, m.email, m.interests
+            SELECT m.member_id, m.username, m.name, m.phone, m.email, m.interests, s.expires_at
             FROM member_sessions s
             JOIN members m ON m.member_id=s.member_id
             WHERE s.token=? AND s.expires_at>?
@@ -262,13 +281,16 @@ def current_member(handler):
             (token, datetime.now(KST).isoformat()),
         ).fetchone()
         if row:
-            # Keep an active member signed in while the app is being used.
-            con.execute(
-                "UPDATE member_sessions SET expires_at=? WHERE token=?",
-                ((datetime.now(KST) + timedelta(days=30)).isoformat(), token),
-            )
-            con.commit()
-            return dict(row)
+            member = dict(row)
+            expires_at = parse_iso_datetime(member.get("expires_at"))
+            if not expires_at or expires_at < datetime.now(KST) + timedelta(days=7):
+                con.execute(
+                    "UPDATE member_sessions SET expires_at=? WHERE token=?",
+                    ((datetime.now(KST) + timedelta(days=30)).isoformat(), token),
+                )
+                con.commit()
+            member.pop("expires_at", None)
+            return member
         return None
     finally:
         con.close()
@@ -403,6 +425,19 @@ def iso_date(value):
     text = str(value or "").strip()[:10]
     try:
         return datetime.strptime(text, "%Y-%m-%d").date()
+    except Exception:
+        return None
+
+
+def parse_iso_datetime(value):
+    text = str(value or "").strip()
+    if not text:
+        return None
+    try:
+        dt = datetime.fromisoformat(text)
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=KST)
+        return dt.astimezone(KST)
     except Exception:
         return None
 
