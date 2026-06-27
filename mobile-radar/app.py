@@ -1111,10 +1111,16 @@ def fetch_fnguide_quarters(code):
             html = raw.decode("euc-kr", errors="ignore")
     except Exception:
         return []
-    table_match = re.search(r'<table[^>]+id=["\']highlight_D_Q["\'][^>]*>(.*?)</table>', html, re.I | re.S)
-    if not table_match:
+    div_idx = html.find('id="highlight_D_Q"')
+    if div_idx < 0:
+        div_idx = html.find("id='highlight_D_Q'")
+    if div_idx < 0:
         return []
-    table = table_match.group(1)
+    table_start = html.find("<table", div_idx)
+    table_end = html.find("</table>", table_start)
+    if table_start < 0 or table_end < 0:
+        return []
+    table = html[table_start:table_end + len("</table>")]
     headers = [clean_cell(x) for x in re.findall(r"<th[^>]*>(.*?)</th>", table, re.I | re.S)]
     periods = []
     for h in headers:
@@ -1128,12 +1134,13 @@ def fetch_fnguide_quarters(code):
         if len(cells) < 2:
             continue
         label = cells[0]
+        label_head = re.sub(r"\s+", "", label)
         nums = cells[1:]
-        if "매출액" in label:
+        if label_head.startswith("매출액"):
             metrics["revenue"] = nums
-        elif "영업이익" in label and "률" not in label:
+        elif label_head.startswith("영업이익") and not label_head.startswith("영업이익률"):
             metrics["operating_profit"] = nums
-        elif "당기순이익" in label or "순이익" in label:
+        elif label_head.startswith("당기순이익") or label_head.startswith("지배주주순이익"):
             metrics["net_income"] = nums
     out = []
     for idx, period in enumerate(periods[-16:]):
@@ -1203,7 +1210,8 @@ def ensure_stock_analysis_cache(stock_code, stock_name="", force=False):
                 updated = datetime.strptime(row["updated_at"], "%Y-%m-%d %H:%M:%S").replace(tzinfo=KST)
             except Exception:
                 updated = None
-            if updated and (now - updated) < timedelta(hours=24):
+            quarter_count = con.execute("SELECT COUNT(*) FROM stock_quarter_financials WHERE stock_code=?", (code,)).fetchone()[0]
+            if updated and (now - updated) < timedelta(hours=24) and quarter_count and row["status"] != "source_unavailable":
                 return stock_analysis_payload_from_con(con, code)
         metrics = fetch_naver_stock_metrics(code)
         quarters = fetch_fnguide_quarters(code)
