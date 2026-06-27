@@ -66,15 +66,36 @@ def app_dir():
 
 
 
+def writable_dir(*candidates):
+    for candidate in candidates:
+        if not candidate:
+            continue
+        try:
+            path = os.path.abspath(candidate)
+            os.makedirs(path, exist_ok=True)
+            probe = os.path.join(path, ".write_test")
+            with open(probe, "w", encoding="utf-8") as f:
+                f.write("ok")
+            try:
+                os.remove(probe)
+            except OSError:
+                pass
+            return path
+        except OSError:
+            continue
+    return tempfile.gettempdir()
+
+
 def member_db_path():
     env = os.environ.get("MEMBER_DB_PATH")
     if env:
         return os.path.abspath(env)
-    base = os.environ.get("MEMBER_DATA_DIR")
-    if not base and os.environ.get("RENDER"):
-        base = "/var/data"
-    if not base:
-        base = os.path.join(app_dir(), "data")
+    base = writable_dir(
+        os.environ.get("MEMBER_DATA_DIR"),
+        "/var/data" if os.environ.get("RENDER") else "",
+        os.path.join(tempfile.gettempdir(), "mobile-radar"),
+        os.path.join(app_dir(), "data"),
+    )
     return os.path.abspath(os.path.join(base, "members.db"))
 
 
@@ -319,7 +340,8 @@ def db_connect():
     db = report_db_exists()
     if not db:
         raise RuntimeError("공유 DB를 찾지 못했습니다.")
-    con = sqlite3.connect(db)
+    uri = "file:" + os.path.abspath(db).replace("\\", "/") + "?mode=ro"
+    con = sqlite3.connect(uri, uri=True)
     con.row_factory = sqlite3.Row
     return con
 
