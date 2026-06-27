@@ -1519,7 +1519,24 @@ function renderResearchReports(data){
   list.innerHTML=reports.map(r=>renderResearchReportCard(r)).join("");
 }
 
-function renderReportSummaryHtml(summary){summary=summary||"";if(!summary)return "-";const parts=summary.split(/\s*핵심:\s*/);if(parts.length>1){return `<div>${escapeHtml(parts[0].trim())}</div><div style="margin-top:6px"><b>핵심</b><br>${escapeHtml(parts.slice(1).join(" 핵심: ").trim())}</div>`}return escapeHtml(summary)}
+function renderReportSummaryHtml(summary){
+  summary=String(summary||"").trim();
+  if(!summary)return "-";
+  const parts=summary.split(/\\s*핵심\\s*[:：]\\s*/);
+  let head=(parts.length>1?parts[0]:"").trim();
+  let opinion="";
+  const m=head.match(/^(투자의견\\s*[^\\n,，.。]+)(.*)$/);
+  if(m){
+    opinion=m[1].replace(/^투자의견\\s*/,"").trim();
+    head=m[2].replace(/^[,，.。\\s]+/,"").trim();
+  }
+  const core=(parts.length>1?parts.slice(1).join(" 핵심: "):summary).trim();
+  const rows=[];
+  if(head)rows.push(`<div><b>요약</b><br>${escapeHtml(head)}</div>`);
+  if(opinion)rows.push(`<div style="margin-top:6px"><b>투자의견</b><br>${escapeHtml(opinion)}</div>`);
+  if(core)rows.push(`<div style="margin-top:6px"><b>핵심</b><br>${escapeHtml(core)}</div>`);
+  return rows.join("");
+}
 function renderResearchReportCard(r){
   const kws=(r.keywords || []).slice(0,8).map(k=>`<span class='report-chip'>${escapeHtml(k.keyword)}</span>`).join("");
   const reasons=(r.reasons || []).filter(x=>x && x.reason_text).slice(0,3).map(x=>`<li><b>${escapeHtml(x.reason_keyword || x.reason_type || "근거")}</b> ${escapeHtml(x.reason_text || "")}</li>`).join("");
@@ -4246,4 +4263,3 @@ if __name__=="__main__":
     except Exception:
         log_error(traceback.format_exc())
         input("Error. Check error_log.txt. Press Enter.")
-
