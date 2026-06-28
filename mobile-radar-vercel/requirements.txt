@@ -1,0 +1,3 @@
+# Keep this file minimal for the first Vercel connection test.
+# Supabase/PostgreSQL dependencies will be added after the database project is ready.
+
