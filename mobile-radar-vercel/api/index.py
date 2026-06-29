@@ -378,7 +378,7 @@ def report_zip_path():
         cache = os.path.join(tempfile.gettempdir(), "mobile_radar_report_reports_remote.db.zip")
         meta = cache + ".meta"
         now = time.time()
-        ttl = int(os.environ.get("REPORT_DB_CACHE_SECONDS", "900") or 900)
+        ttl = int(os.environ.get("REPORT_DB_CACHE_SECONDS", "60") or 60)
         try:
             if os.path.exists(cache) and os.path.getsize(cache) > 0:
                 age = now - os.path.getmtime(cache)
