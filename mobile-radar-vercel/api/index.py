@@ -61,6 +61,9 @@ HOT_CACHE = {"loaded_at": 0, "data": None}
 STOCK_CACHE = {"items": None}
 MEMBER_DB_READY = False
 MEMBER_DB_LOCK = threading.Lock()
+VISITOR_LOCK = threading.Lock()
+VISITOR_STATE = None
+VISITOR_FILE = os.path.join(tempfile.gettempdir(), "market_radar_mobile_visitors.json")
 
 
 def app_dir():
@@ -259,6 +262,64 @@ def parse_cookie(header):
             k, v = part.split("=", 1)
             cookies[k.strip()] = v.strip()
     return cookies
+
+
+def load_visitor_state():
+    global VISITOR_STATE
+    if VISITOR_STATE is not None:
+        return VISITOR_STATE
+    state = {"visitors": [], "days": {}}
+    try:
+        if os.path.exists(VISITOR_FILE):
+            with open(VISITOR_FILE, "r", encoding="utf-8") as f:
+                loaded = json.load(f)
+            if isinstance(loaded, dict):
+                state["visitors"] = list(dict.fromkeys(loaded.get("visitors") or []))
+                state["days"] = loaded.get("days") if isinstance(loaded.get("days"), dict) else {}
+    except Exception:
+        state = {"visitors": [], "days": {}}
+    VISITOR_STATE = state
+    return VISITOR_STATE
+
+
+def save_visitor_state(state):
+    try:
+        with open(VISITOR_FILE, "w", encoding="utf-8") as f:
+            json.dump(state, f, ensure_ascii=False)
+    except Exception:
+        pass
+
+
+def visit_payload(handler):
+    today = datetime.now(KST).strftime("%Y-%m-%d")
+    cookies = parse_cookie(handler.headers.get("Cookie", ""))
+    visitor_id = cookies.get("mr_visitor") or secrets.token_urlsafe(18)
+    new_cookie = "mr_visitor" not in cookies
+    with VISITOR_LOCK:
+        state = load_visitor_state()
+        visitors = set(state.get("visitors") or [])
+        if visitor_id not in visitors:
+            visitors.add(visitor_id)
+        days = state.setdefault("days", {})
+        today_seen = set(days.get(today) or [])
+        today_seen.add(visitor_id)
+        days[today] = sorted(today_seen)
+        cutoff = (datetime.now(KST) - timedelta(days=90)).strftime("%Y-%m-%d")
+        for day in list(days.keys()):
+            if day < cutoff:
+                days.pop(day, None)
+        state["visitors"] = sorted(visitors)
+        save_visitor_state(state)
+        payload = {
+            "ok": True,
+            "today": today,
+            "todayVisitors": len(today_seen),
+            "totalVisitors": len(visitors),
+        }
+    headers = None
+    if new_cookie:
+        headers = {"Set-Cookie": f"mr_visitor={visitor_id}; Path=/; SameSite=Lax; Max-Age={365*24*3600}"}
+    return payload, headers
 
 
 def is_guest(handler):
@@ -1677,7 +1738,7 @@ HTML = r"""<!doctype html>
 :root{--bg:#0d131a;--panel:#111820;--card:#202832;--line:#344151;--text:#f2f7ff;--muted:#9fb0bf;--good:#8aff8a;--accent:#9dccff;--cyan:#42c7d8}
 *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,BlinkMacSystemFont,"Malgun Gothic",sans-serif}
 .app{max-width:760px;margin:0 auto;padding:14px 12px 90px}.top{position:sticky;top:0;z-index:10;background:linear-gradient(#0d131a 80%,rgba(13,19,26,0));padding:10px 0 12px}
-h1{font-size:24px;margin:0 0 4px}.status{font-size:12px;color:var(--muted);margin-top:8px}
+h1{font-size:24px;margin:0 0 4px}.status{font-size:12px;color:var(--muted);margin-top:8px}.visitor-stats{font-size:11px;color:#7f95a8;margin-top:3px;letter-spacing:0}
 .home-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:14px 0}.home-card{min-height:132px;background:linear-gradient(180deg,#141d27,#111820);border:1px solid var(--line);border-radius:16px;padding:12px;overflow:hidden;box-shadow:0 10px 22px rgba(0,0,0,.16)}.home-card.wide{grid-column:span 2}.home-card.action{min-height:84px;display:flex;flex-direction:column;justify-content:center}.home-card h2{font-size:15px;margin:0 0 9px;letter-spacing:0}.home-card:nth-child(1) h2{color:#9dccff}.home-card:nth-child(2) h2{color:#ffcf9b}.home-card:nth-child(3) h2{color:#c3a7ff}.home-card:nth-child(4) h2{color:#42c7d8}.home-card:nth-child(5) h2{color:#8aff8a}.home-card:nth-child(6) h2{color:#ffb5d0}.home-card:nth-child(7) h2{color:#d7e7ff}
 .ticker{height:47px;overflow:hidden}.ticker-track{display:grid;gap:5px;animation:roll 10s linear infinite}.ticker-line{display:grid;grid-template-columns:18px minmax(0,1fr) auto;gap:5px;align-items:center;color:#d8e4ee;font-size:12px;min-height:21px}.ticker-line span:nth-child(2){white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.ticker-rank{color:var(--accent);font-weight:900}.ticker-val{color:var(--good);font-weight:800;font-size:11px;white-space:nowrap}@keyframes roll{0%,20%{transform:translateY(0)}28%,48%{transform:translateY(-26px)}56%,76%{transform:translateY(-52px)}84%,96%{transform:translateY(-78px)}100%{transform:translateY(0)}}.hint{font-size:11px;color:var(--muted);margin-top:7px}.report-home,.macro-home,.export-home,.theme-home{height:82px;display:grid;grid-template-columns:70px 1fr;gap:10px;align-items:center}.report-art,.macro-art,.export-art,.theme-art{height:74px;border-radius:15px;background-color:#0d131a;background-position:center;background-size:contain;background-repeat:no-repeat;border:1px solid #344151;box-shadow:0 12px 24px rgba(125,177,255,.18)}.report-art{background-image:url('/static/report-card-d.png')}.macro-art{background-image:url('/static/macro-card.png')}.export-art{background-image:url('/static/export-card.png')}.theme-art{background-image:url('/static/theme-card.png')}.report-home b,.macro-home b,.export-home b,.theme-home b{display:block;color:#d7e7ff;font-size:14px}.report-home span,.macro-home span,.export-home span,.theme-home span{display:block;color:#9fb0bf;font-size:11px;line-height:1.45;margin-top:3px}.export-home strong{color:#7df3a1;font-weight:900}
 .macro-chart-grid{display:grid;gap:10px}.macro-chart{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:10px}.macro-chart-head{display:flex;justify-content:space-between;align-items:baseline;gap:8px}.macro-chart-name{font-weight:900}.macro-chart-value{color:#d7e7ff;font-weight:900}.macro-pos{color:#8aff8a}.macro-neg{color:#ff8585}.mini-svg{width:100%;height:108px;margin-top:8px;display:block}.mini-svg .axis{stroke:#263544;stroke-width:1}.mini-svg .line{fill:none;stroke:#7db1ff;stroke-width:3}.mini-svg .area{fill:#1b2d43;opacity:.55}
@@ -1697,6 +1758,7 @@ h1{font-size:24px;margin:0 0 4px}.status{font-size:12px;color:var(--muted);margi
     <div class="top-actions"><button onclick="showDetail('settings')">설정</button><button onclick="logout()">로그아웃</button></div>
     <h1>시장 레이더 Mobile</h1>
     <div id="status" class="status">불러오는 중...</div>
+    <div id="visitorStats" class="visitor-stats">방문자 확인 중...</div>
     <button class="refresh" onclick="loadHot(true)">오늘 HOT 새로고침</button>
   </div>
   <div id="homeGrid" class="home-grid">
@@ -1734,6 +1796,7 @@ function saveLocalWatchlist(rows){localStorage.setItem("mr_watchlist_v1",JSON.st
 function guestMemberPayload(rows){return {ok:true,authenticated:false,guest:true,member:{name:"관심종목"},watchlist:(rows&&rows.length?rows:loadLocalWatchlist()).slice(0,3)}}
 function authExpired(){MEMBER_DATA=guestMemberPayload();renderMemberWatch(MEMBER_DATA)}
 async function apiJson(url,opts){const r=await fetch(url,opts||{});const d=await r.json().catch(()=>({ok:false,error:"응답 오류"}));if(r.status===401){throw new Error("로그인이 필요한 기능입니다.")}if(!r.ok||d.ok===false)throw new Error(d.error||"로드 실패");return d}
+async function loadVisitStats(){const el=document.getElementById("visitorStats");if(!el)return;try{const r=await fetch("/api/visit?ts="+Date.now());const d=await r.json();if(!d.ok)throw new Error(d.error||"방문자 로드 실패");el.textContent=`오늘 방문 ${num(d.todayVisitors)}명 · 누적 ${num(d.totalVisitors)}명`}catch(e){el.textContent=""}}
 async function loadHot(force=false){const st=document.getElementById("status");st.textContent="오늘 HOT 계산 중...";try{const r=await fetch(`/api/hot?force=${force?1:0}&ts=${Date.now()}`);const d=await r.json();if(!d.ok)throw new Error(d.error||"로드 실패");DATA=d;render();st.innerHTML=`${esc(d.today)} / 뉴스 ${d.sourceNewsCount}건 / 업데이트 ${esc(d.generatedAt)} / 공유DB ${d.dbShared?"연결":"없음"}`}catch(e){st.innerHTML=`오류: ${esc(e.message)}`}}
 function render(){document.body.classList.remove("page-mode");renderHome()}
 function ticker(rows,type){if(!rows.length)return "<div class='empty'>데이터 없음</div>";const lines=rows.slice(0,5).map((r,i)=>{const name=type==="stock"?r.stockName:(type==="report"?r.stockName:r.name||r.keyword);const val=type==="stock"||type==="macro"?`뉴스 ${r.newsCount||0}건`:(type==="report"?(r.opinion||r.firm||"리포트"):r.value||"");return `<div class='ticker-line'><span class='ticker-rank'>${i+1}</span><span>${esc(name)}</span><span class='ticker-val'>${esc(val)}</span></div>`}).join("");return `<div class='ticker'><div class='ticker-track'>${lines}${lines}</div></div><div class='hint'>눌러서 자세히 보기</div>`}
@@ -1848,6 +1911,7 @@ async function loadWatchNewsMap(i,name){
   }
 }
 
+loadVisitStats();
 loadHot(false).then(loadMember);
 </script>
 </body>
@@ -2066,6 +2130,9 @@ class Handler(BaseHTTPRequestHandler):
             elif parsed.path == "/api/hot":
                 force = "force=1" in self.path
                 self.send(200, json.dumps(hot_payload(force), ensure_ascii=False), "application/json; charset=utf-8")
+            elif parsed.path == "/api/visit":
+                payload, headers = visit_payload(self)
+                self.send_json(200, payload, headers=headers)
             elif parsed.path == "/api/research-reports":
                 qs = parse_qs(parsed.query)
                 start = qs.get("start", [""])[0].strip()
