@@ -342,7 +342,7 @@ def supabase_watchlist(device_id):
             for r in rows
             if r.get("stock_name") or r.get("stock_code")
         ]
-        return watch[:3] if watch else default_watchlist()
+        return watch[:3]
     except Exception:
         return None
 
@@ -562,9 +562,12 @@ def guest_watchlist_payload(handler):
     device_id, cookie = get_or_create_device(handler)
     watch = supabase_watchlist(device_id)
     storage = "supabase"
+    saved_watchlist = bool(watch)
     if watch is None:
         watch = default_watchlist()
         storage = "local"
+    elif not watch:
+        watch = default_watchlist()
     payload = {
         "ok": True,
         "authenticated": False,
@@ -573,6 +576,7 @@ def guest_watchlist_payload(handler):
         "watchlist": watch[:3],
         "deviceId": device_id,
         "storage": storage,
+        "savedWatchlist": saved_watchlist,
     }
     headers = {"Set-Cookie": cookie} if cookie else None
     return payload, headers
@@ -2002,7 +2006,7 @@ function renderMacroCharts(){const el=document.getElementById("detailList");cons
 function openModal(type,i){const r=(type==="stock"?DATA.stockHot:DATA.macroHot)[i];if(!r)return;document.getElementById("modalTitle").textContent=type==="stock"?`${r.stockName} 뉴스`:`${r.keyword} 뉴스`;document.getElementById("modalMeta").textContent=`뉴스 ${r.newsCount}건 / 점수 ${r.score}`;document.getElementById("modalBody").innerHTML=(r.articles||[]).map(a=>`<div class='news'><a href='${esc(a.link)}' target='_blank' rel='noreferrer'>${esc(a.title)}</a><div class='meta'>${esc(a.source)} ${esc(a.published)}</div></div>`).join("");document.getElementById("modal").classList.remove("hidden")}
 function closeModal(){document.getElementById("modal").classList.add("hidden")}
 async function logout(){return false}
-async function loadMember(){try{const r=await fetch("/api/member/me?ts="+Date.now());const d=await r.json();if(d.ok){const rows=(d.watchlist||[]).slice(0,3);if(rows.length)saveLocalWatchlist(rows);MEMBER_DATA=d.authenticated?d:guestMemberPayload(rows)}else{MEMBER_DATA=guestMemberPayload()}renderMemberWatch(MEMBER_DATA)}catch(e){MEMBER_DATA=guestMemberPayload();renderMemberWatch(MEMBER_DATA)}}
+async function loadMember(){try{const r=await fetch("/api/member/me?ts="+Date.now());const d=await r.json();if(d.ok){let rows=(d.watchlist||[]).slice(0,3);if(d.authenticated||d.savedWatchlist){if(rows.length)saveLocalWatchlist(rows)}else{const localRows=loadLocalWatchlist();if(localRows.length)rows=localRows}MEMBER_DATA=d.authenticated?d:guestMemberPayload(rows)}else{MEMBER_DATA=guestMemberPayload()}renderMemberWatch(MEMBER_DATA)}catch(e){MEMBER_DATA=guestMemberPayload();renderMemberWatch(MEMBER_DATA)}}
 function renderMemberWatch(d){const el=document.getElementById("watchCard");if(!el)return;const rows=d.watchlist||[];if(!rows.length){el.innerHTML="<div class='empty'>관심종목이 아직 없습니다.</div><div class='hint'>설정에서 관심종목을 등록하세요</div>";return}el.innerHTML=rows.map((r,i)=>`<div class='ticker-line'><span class='ticker-rank'>${i+1}</span><span>${esc(r.name)}</span><span class='ticker-val'>${esc(r.code||"")}</span></div>`).join("")+`<div class='hint'>뉴스·보고서·주가·수급 보기</div>`}
 function renderWatchDashboard(){const el=document.getElementById("detailList");const d=MEMBER_DATA||guestMemberPayload();const rows=(d.watchlist&&d.watchlist.length?d.watchlist:loadLocalWatchlist()).slice(0,3);if(!rows.length){el.innerHTML="<div class='empty'>관심종목이 없습니다. 설정에서 관심종목 3개를 등록하세요.</div>";return}el.innerHTML=`<div class='section-note'><b>내 관심종목 3개</b><br>뉴스, 최근 보고서, 주가와 외국인/기관 수급 흐름을 한 화면에서 봅니다.</div>`+rows.map((r,i)=>`<div class='watch-stock' id='watchStock${i}'><h3>${i+1}. ${esc(r.name)} <span class='meta'>${esc(r.code||"")}</span></h3><div class='watch-actions'><button onclick='loadWatchNewsMap(${i},"${esc(r.name||"")}")'>뉴스 연관맵</button><button onclick='loadWatchStock(${i},"${esc(r.code||"")}","${esc(r.name||"")}")'>주가·수급 새로고침</button><button onclick='loadStockAnalysis(${i},"${esc(r.code||"")}","${esc(r.name||"")}")'>종목분석</button></div><div id='watchBody${i}'><div class='empty'>데이터를 불러오는 중...</div></div></div>`).join("");rows.forEach((r,i)=>loadWatchStock(i,r.code||"",r.name||""))}
 async function loadWatchStock(i,code,name){const box=document.getElementById(`watchBody${i}`);if(!box)return;box.innerHTML="<div class='empty'>주가·수급·보고서를 불러오는 중...</div>";try{const chartReq=fetch(`/api/report-price-chart?${new URLSearchParams({stock_code:code||"",period:"3m",ts:String(Date.now())}).toString()}`).then(r=>r.json());const reportReq=fetch(`/api/research-reports?${new URLSearchParams({q:code||name||"",limit:"3",ts:String(Date.now())}).toString()}`).then(r=>r.json());const [chart,reports]=await Promise.all([chartReq,reportReq]);const reportRows=(reports.reports||[]).slice(0,3);const reportHtml=reportRows.length?reportRows.map(r=>`<div class='meta'>${esc(r.report_date)} / ${esc(r.securities_firm||"")} / ${esc(r.investment_opinion||"")} / 목표가 ${r.target_price?num(r.target_price)+"원":"-"}<br>${esc(r.title||"")}</div>`).join(""):"<div class='meta'>최근 보고서가 없습니다.</div>";box.innerHTML=`<div class='section-note'><b>최근 보고서</b>${reportHtml}</div><div class='meta'>주가 흐름</div>${priceTargetSvg(chart.closeSeries||[],chart.targetSeries||[])}<div class='meta'>외국인/기관 순매수</div>${flowSvg(chart.flowSeries||[])}`}catch(e){box.innerHTML=`<div class='empty'>관심종목 데이터 오류: ${esc(e.message)}</div>`}}
