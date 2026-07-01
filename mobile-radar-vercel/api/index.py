@@ -264,6 +264,111 @@ def parse_cookie(header):
     return cookies
 
 
+def default_watchlist():
+    return [
+        {"name": "삼성전자", "code": "005930"},
+        {"name": "SK하이닉스", "code": "000660"},
+        {"name": "현대차", "code": "005380"},
+    ]
+
+
+def supabase_config():
+    url = (
+        os.environ.get("SUPABASE_URL")
+        or os.environ.get("NEXT_PUBLIC_SUPABASE_URL")
+        or os.environ.get("STORAGE_URL")
+    )
+    key = (
+        os.environ.get("SUPABASE_SERVICE_ROLE_KEY")
+        or os.environ.get("SUPABASE_ANON_KEY")
+        or os.environ.get("SUPABASE_PUBLISHABLE_KEY")
+        or os.environ.get("NEXT_PUBLIC_SUPABASE_ANON_KEY")
+        or os.environ.get("NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY")
+        or os.environ.get("STORAGE_ANON_KEY")
+        or os.environ.get("STORAGE_PUBLISHABLE_KEY")
+    )
+    if not url or not key:
+        return None, None
+    return url.rstrip("/"), key
+
+
+def supabase_request(method, path, payload=None, prefer=None):
+    base, key = supabase_config()
+    if not base or not key:
+        return None
+    url = f"{base}/rest/v1/{path.lstrip('/')}"
+    data = None
+    headers = {
+        "apikey": key,
+        "Authorization": f"Bearer {key}",
+        "Accept": "application/json",
+        "Content-Type": "application/json; charset=utf-8",
+    }
+    if prefer:
+        headers["Prefer"] = prefer
+    if payload is not None:
+        data = json.dumps(payload, ensure_ascii=False).encode("utf-8")
+    req = Request(url, data=data, headers=headers, method=method)
+    with urlopen(req, timeout=20) as res:
+        raw = res.read().decode("utf-8")
+    if not raw:
+        return []
+    return json.loads(raw)
+
+
+def get_or_create_device(handler):
+    cookies = parse_cookie(handler.headers.get("Cookie", ""))
+    device_id = cookies.get("mr_device") or cookies.get("mr_visitor") or secrets.token_urlsafe(18)
+    is_new = "mr_device" not in cookies
+    header = None
+    if is_new:
+        header = f"mr_device={device_id}; Path=/; SameSite=Lax; Max-Age={365*24*3600}"
+    return device_id, header
+
+
+def supabase_watchlist(device_id):
+    try:
+        rows = supabase_request(
+            "GET",
+            "device_watchlists"
+            f"?device_id=eq.{quote_plus(device_id)}"
+            "&select=stock_name,stock_code,sort_order"
+            "&order=sort_order.asc",
+        )
+        if rows is None:
+            return None
+        watch = [
+            {"name": r.get("stock_name") or "", "code": r.get("stock_code") or ""}
+            for r in rows
+            if r.get("stock_name") or r.get("stock_code")
+        ]
+        return watch[:3] if watch else default_watchlist()
+    except Exception:
+        return None
+
+
+def save_supabase_watchlist(device_id, stocks):
+    try:
+        supabase_request("DELETE", f"device_watchlists?device_id=eq.{quote_plus(device_id)}")
+        rows = []
+        now = datetime.now(KST).isoformat()
+        for idx, stock in enumerate((stocks or [])[:3], 1):
+            rows.append(
+                {
+                    "device_id": device_id,
+                    "stock_name": stock.get("name") or "",
+                    "stock_code": stock.get("code") or "",
+                    "sort_order": idx,
+                    "updated_at": now,
+                }
+            )
+        if rows:
+            supabase_request("POST", "device_watchlists", rows, prefer="return=minimal")
+        return True
+    except Exception:
+        return False
+
+
 def load_visitor_state():
     global VISITOR_STATE
     if VISITOR_STATE is not None:
@@ -293,8 +398,45 @@ def save_visitor_state(state):
 def visit_payload(handler):
     today = datetime.now(KST).strftime("%Y-%m-%d")
     cookies = parse_cookie(handler.headers.get("Cookie", ""))
-    visitor_id = cookies.get("mr_visitor") or secrets.token_urlsafe(18)
+    visitor_id = cookies.get("mr_visitor") or cookies.get("mr_device") or secrets.token_urlsafe(18)
     new_cookie = "mr_visitor" not in cookies
+    try:
+        now_iso = datetime.now(KST).isoformat()
+        supabase_request(
+            "POST",
+            "visitor_logs?on_conflict=device_id,visit_date",
+            {
+                "device_id": visitor_id,
+                "visit_date": today,
+                "first_seen_at": now_iso,
+                "last_seen_at": now_iso,
+            },
+            prefer="resolution=merge-duplicates,return=minimal",
+        )
+        today_rows = supabase_request(
+            "GET",
+            f"visitor_logs?visit_date=eq.{quote_plus(today)}&select=device_id",
+        )
+        total_rows = supabase_request("GET", "visitor_logs?select=device_id")
+        if today_rows is not None and total_rows is not None:
+            payload = {
+                "ok": True,
+                "today": today,
+                "todayVisitors": len({r.get("device_id") for r in today_rows if r.get("device_id")}),
+                "totalVisitors": len({r.get("device_id") for r in total_rows if r.get("device_id")}),
+                "storage": "supabase",
+            }
+            headers = None
+            if new_cookie:
+                headers = {
+                    "Set-Cookie": [
+                        f"mr_visitor={visitor_id}; Path=/; SameSite=Lax; Max-Age={365*24*3600}",
+                        f"mr_device={visitor_id}; Path=/; SameSite=Lax; Max-Age={365*24*3600}",
+                    ]
+                }
+            return payload, headers
+    except Exception:
+        pass
     with VISITOR_LOCK:
         state = load_visitor_state()
         visitors = set(state.get("visitors") or [])
@@ -414,6 +556,26 @@ def member_payload(member):
     finally:
         con.close()
     return {"ok": True, "authenticated": True, "member": member, "watchlist": watch}
+
+
+def guest_watchlist_payload(handler):
+    device_id, cookie = get_or_create_device(handler)
+    watch = supabase_watchlist(device_id)
+    storage = "supabase"
+    if watch is None:
+        watch = default_watchlist()
+        storage = "local"
+    payload = {
+        "ok": True,
+        "authenticated": False,
+        "guest": True,
+        "member": {"name": "관심종목"},
+        "watchlist": watch[:3],
+        "deviceId": device_id,
+        "storage": storage,
+    }
+    headers = {"Set-Cookie": cookie} if cookie else None
+    return payload, headers
 
 
 def data_dirs():
@@ -1840,7 +2002,7 @@ function renderMacroCharts(){const el=document.getElementById("detailList");cons
 function openModal(type,i){const r=(type==="stock"?DATA.stockHot:DATA.macroHot)[i];if(!r)return;document.getElementById("modalTitle").textContent=type==="stock"?`${r.stockName} 뉴스`:`${r.keyword} 뉴스`;document.getElementById("modalMeta").textContent=`뉴스 ${r.newsCount}건 / 점수 ${r.score}`;document.getElementById("modalBody").innerHTML=(r.articles||[]).map(a=>`<div class='news'><a href='${esc(a.link)}' target='_blank' rel='noreferrer'>${esc(a.title)}</a><div class='meta'>${esc(a.source)} ${esc(a.published)}</div></div>`).join("");document.getElementById("modal").classList.remove("hidden")}
 function closeModal(){document.getElementById("modal").classList.add("hidden")}
 async function logout(){try{await fetch('/api/auth/logout',{method:'POST'})}catch(e){} MEMBER_DATA=guestMemberPayload();renderMemberWatch(MEMBER_DATA);showDetail("settings")}
-async function loadMember(){try{const r=await fetch("/api/member/me?ts="+Date.now());const d=await r.json();if(d.ok&&d.authenticated){MEMBER_DATA=d}else{MEMBER_DATA=guestMemberPayload()}renderMemberWatch(MEMBER_DATA)}catch(e){MEMBER_DATA=guestMemberPayload();renderMemberWatch(MEMBER_DATA)}}
+async function loadMember(){try{const r=await fetch("/api/member/me?ts="+Date.now());const d=await r.json();if(d.ok){const rows=(d.watchlist||[]).slice(0,3);if(rows.length)saveLocalWatchlist(rows);MEMBER_DATA=d.authenticated?d:guestMemberPayload(rows)}else{MEMBER_DATA=guestMemberPayload()}renderMemberWatch(MEMBER_DATA)}catch(e){MEMBER_DATA=guestMemberPayload();renderMemberWatch(MEMBER_DATA)}}
 function renderMemberWatch(d){const el=document.getElementById("watchCard");if(!el)return;const rows=d.watchlist||[];if(!rows.length){el.innerHTML="<div class='empty'>관심종목이 아직 없습니다.</div><div class='hint'>설정에서 관심종목을 등록하세요</div>";return}el.innerHTML=rows.map((r,i)=>`<div class='ticker-line'><span class='ticker-rank'>${i+1}</span><span>${esc(r.name)}</span><span class='ticker-val'>${esc(r.code||"")}</span></div>`).join("")+`<div class='hint'>뉴스·보고서·주가·수급 보기</div>`}
 function renderWatchDashboard(){const el=document.getElementById("detailList");const d=MEMBER_DATA||guestMemberPayload();const rows=(d.watchlist&&d.watchlist.length?d.watchlist:loadLocalWatchlist()).slice(0,3);if(!rows.length){el.innerHTML="<div class='empty'>관심종목이 없습니다. 설정에서 관심종목 3개를 등록하세요.</div>";return}el.innerHTML=`<div class='section-note'><b>내 관심종목 3개</b><br>뉴스, 최근 보고서, 주가와 외국인/기관 수급 흐름을 한 화면에서 봅니다.</div>`+rows.map((r,i)=>`<div class='watch-stock' id='watchStock${i}'><h3>${i+1}. ${esc(r.name)} <span class='meta'>${esc(r.code||"")}</span></h3><div class='watch-actions'><button onclick='loadWatchNewsMap(${i},"${esc(r.name||"")}")'>뉴스 연관맵</button><button onclick='loadWatchStock(${i},"${esc(r.code||"")}","${esc(r.name||"")}")'>주가·수급 새로고침</button><button onclick='loadStockAnalysis(${i},"${esc(r.code||"")}","${esc(r.name||"")}")'>종목분석</button></div><div id='watchBody${i}'><div class='empty'>데이터를 불러오는 중...</div></div></div>`).join("");rows.forEach((r,i)=>loadWatchStock(i,r.code||"",r.name||""))}
 async function loadWatchStock(i,code,name){const box=document.getElementById(`watchBody${i}`);if(!box)return;box.innerHTML="<div class='empty'>주가·수급·보고서를 불러오는 중...</div>";try{const chartReq=fetch(`/api/report-price-chart?${new URLSearchParams({stock_code:code||"",period:"3m",ts:String(Date.now())}).toString()}`).then(r=>r.json());const reportReq=fetch(`/api/research-reports?${new URLSearchParams({q:code||name||"",limit:"3",ts:String(Date.now())}).toString()}`).then(r=>r.json());const [chart,reports]=await Promise.all([chartReq,reportReq]);const reportRows=(reports.reports||[]).slice(0,3);const reportHtml=reportRows.length?reportRows.map(r=>`<div class='meta'>${esc(r.report_date)} / ${esc(r.securities_firm||"")} / ${esc(r.investment_opinion||"")} / 목표가 ${r.target_price?num(r.target_price)+"원":"-"}<br>${esc(r.title||"")}</div>`).join(""):"<div class='meta'>최근 보고서가 없습니다.</div>";box.innerHTML=`<div class='section-note'><b>최근 보고서</b>${reportHtml}</div><div class='meta'>주가 흐름</div>${priceTargetSvg(chart.closeSeries||[],chart.targetSeries||[])}<div class='meta'>외국인/기관 순매수</div>${flowSvg(chart.flowSeries||[])}`}catch(e){box.innerHTML=`<div class='empty'>관심종목 데이터 오류: ${esc(e.message)}</div>`}}
@@ -1849,7 +2011,7 @@ function valOrDash(v,suffix=""){return v===null||v===undefined||v===""?"-":`${nu
 function stockAnalysisHtml(d){const p=d.profile||{};const q=d.quarters||[];const score=(v)=>v===null||v===undefined?"-":Number(v).toFixed(0);return `<div class='section-note'><b>${esc(p.stock_name||"종목분석")}</b><br>업데이트 ${esc(p.updated_at||"-")} / 원천 ${esc(p.provider||"-")}<br>${esc(p.summary||"분석 데이터가 아직 충분하지 않습니다.")}</div><div class='metric-grid'><div class='metric'><b>${valOrDash(p.current_price,"원")}</b><span>현재가</span></div><div class='metric'><b>${valOrDash(p.per,"배")}</b><span>PER</span></div><div class='metric'><b>${valOrDash(p.pbr,"배")}</b><span>PBR</span></div><div class='metric'><b>${valOrDash(p.eps,"원")}</b><span>EPS</span></div><div class='metric'><b>${valOrDash(p.bps,"원")}</b><span>BPS</span></div><div class='metric'><b>${valOrDash(p.dividend_yield,"%")}</b><span>배당수익률</span></div></div><div class='chart-summary'><div class='chart-pill'><span>성장</span><b>${score(p.growth_score)}</b></div><div class='chart-pill'><span>수익성</span><b>${score(p.profit_score)}</b></div><div class='chart-pill'><span>밸류</span><b>${score(p.valuation_score)}</b></div></div><div class='meta'>분기 매출·영업이익 추이</div>${quarterFinancialSvg(q)}<div class='section-note'><b>분기 데이터</b>${quarterTable(q)}</div>`}
 function quarterTable(rows){if(!rows.length)return "<div class='empty'>분기 재무 데이터가 아직 없습니다. 원천 페이지가 열리면 자동으로 채워집니다.</div>";return `<table class='industry-stat-table'><thead><tr><th>분기</th><th>매출</th><th>영업이익</th><th>영업이익률</th></tr></thead><tbody>${rows.slice(-12).map(r=>`<tr><td>${esc(r.period)}</td><td>${r.revenue==null?"-":num(r.revenue)+"억"}</td><td>${r.operating_profit==null?"-":num(r.operating_profit)+"억"}</td><td>${r.operating_margin==null?"-":Number(r.operating_margin).toFixed(1)+"%"}</td></tr>`).join("")}</tbody></table>`}
 function quarterFinancialSvg(rows){rows=(rows||[]).filter(r=>r.revenue!=null||r.operating_profit!=null).slice(-12);if(!rows.length)return "<div class='empty'>그릴 수 있는 분기 재무 데이터가 없습니다.</div>";const w=360,h=220,l=34,r=24,t=24,b=36;const rev=rows.map(x=>Number(x.revenue||0));const op=rows.map(x=>Number(x.operating_profit||0));const max=Math.max(...rev,...op.map(Math.abs),1);const x=i=>rows.length>1?l+i*(w-l-r)/(rows.length-1):w/2;const y=v=>h-b-(Number(v||0)/max)*(h-t-b);const barW=Math.max(8,(w-l-r)/rows.length*.46);const bars=rows.map((row,i)=>{const x0=x(i)-barW/2;return `<rect x='${x0}' y='${y(row.revenue||0)}' width='${barW}' height='${h-b-y(row.revenue||0)}' fill='#315d92' opacity='.72'></rect>`}).join("");const line=rows.map((row,i)=>`${x(i)},${y(row.operating_profit||0)}`).join(" ");const last=rows[rows.length-1];const grid=[0,.25,.5,.75,1].map(v=>{const yy=t+v*(h-t-b);return `<line x1='${l}' y1='${yy}' x2='${w-r}' y2='${yy}' stroke='#1f2b38'></line>`}).join("");return `<svg class='detail-chart' viewBox='0 0 ${w} ${h}'>${grid}${bars}<polyline points='${line}' fill='none' stroke='#8aff8a' stroke-width='2.7' stroke-linejoin='round'></polyline><text x='${l}' y='15' fill='#7db1ff' font-size='10'>매출</text><text x='${l+34}' y='15' fill='#8aff8a' font-size='10'>영업이익</text><text x='${w-r}' y='${Math.max(18,y(last.operating_profit||0)-6)}' fill='#8aff8a' font-size='10' text-anchor='end'>${last.operating_profit==null?"-":num(last.operating_profit)+"억"}</text><text x='${l}' y='${h-10}' fill='#7f91a3' font-size='9'>${esc(rows[0].period||"")}</text><text x='${w-r}' y='${h-10}' fill='#7f91a3' font-size='9' text-anchor='end'>${esc(last.period||"")}</text></svg>`}
-function renderMemberPage(){const el=document.getElementById("detailList");const d=MEMBER_DATA||guestMemberPayload();const m=d.member||{};const w=(d.watchlist&&d.watchlist.length?d.watchlist:loadLocalWatchlist()).slice(0,3);el.innerHTML=`<div class='section-note'><b>관심종목 설정</b><br>로그인 없이 누구나 관심종목 3개를 저장해 사용할 수 있습니다. 현재 Vercel 버전에서는 이 브라우저에 저장되고, Supabase 연결 후 계정 DB 저장으로 바꿀 예정입니다.</div><form class='member-form' onsubmit='saveMember(event)'><label class='full'>관심종목 1<input name='stock1' value='${esc(w[0]?.name||w[0]?.code||"")}' placeholder='삼성전자 또는 005930'></label><label class='full'>관심종목 2<input name='stock2' value='${esc(w[1]?.name||w[1]?.code||"")}' placeholder='SK하이닉스'></label><label class='full'>관심종목 3<input name='stock3' value='${esc(w[2]?.name||w[2]?.code||"")}' placeholder='현대차'></label><div id='memberSaveMsg' class='save-msg'></div><button>관심종목 저장</button></form>`}
+function renderMemberPage(){const el=document.getElementById("detailList");const d=MEMBER_DATA||guestMemberPayload();const m=d.member||{};const w=(d.watchlist&&d.watchlist.length?d.watchlist:loadLocalWatchlist()).slice(0,3);el.innerHTML=`<div class='section-note'><b>관심종목 설정</b><br>로그인 없이 누구나 관심종목 3개를 저장해 사용할 수 있습니다. Supabase DB가 연결되어 있으면 외부 DB에 저장되고, 연결 전에는 이 브라우저에 임시 저장됩니다.</div><form class='member-form' onsubmit='saveMember(event)'><label class='full'>관심종목 1<input name='stock1' value='${esc(w[0]?.name||w[0]?.code||"")}' placeholder='삼성전자 또는 005930'></label><label class='full'>관심종목 2<input name='stock2' value='${esc(w[1]?.name||w[1]?.code||"")}' placeholder='SK하이닉스'></label><label class='full'>관심종목 3<input name='stock3' value='${esc(w[2]?.name||w[2]?.code||"")}' placeholder='현대차'></label><div id='memberSaveMsg' class='save-msg'></div><button>관심종목 저장</button></form>`}
 async function saveMember(ev){ev.preventDefault();const msg=document.getElementById("memberSaveMsg");msg.textContent="저장 중...";try{const data=Object.fromEntries(new FormData(ev.target).entries());const r=await fetch("/api/member/update",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(data)});const d=await r.json();if(!r.ok||!d.ok)throw new Error(d.error||"저장 실패");const rows=(d.watchlist||[]).slice(0,3);saveLocalWatchlist(rows);MEMBER_DATA=d.authenticated?d:guestMemberPayload(rows);renderMemberWatch(MEMBER_DATA);renderMemberPage();document.getElementById("memberSaveMsg").textContent="저장 완료"}catch(e){msg.textContent=e.message}}
 
 let LAST_NEWS_MAP=null;
@@ -2051,12 +2213,15 @@ class Handler(BaseHTTPRequestHandler):
             if parsed.path == "/api/member/update":
                 member = current_member(self)
                 if not member:
+                    device_id, cookie = get_or_create_device(self)
                     selected_stocks = []
                     for raw in [data.get("stock1"), data.get("stock2"), data.get("stock3")]:
                         stock = resolve_watch_stock(raw)
                         if stock:
                             selected_stocks.append(stock)
                     warm_stock_analysis(selected_stocks)
+                    saved = save_supabase_watchlist(device_id, selected_stocks[:3])
+                    headers = {"Set-Cookie": cookie} if cookie else None
                     return self.send_json(
                         200,
                         {
@@ -2065,7 +2230,10 @@ class Handler(BaseHTTPRequestHandler):
                             "guest": True,
                             "member": {"name": "관심종목"},
                             "watchlist": selected_stocks[:3],
+                            "deviceId": device_id,
+                            "storage": "supabase" if saved else "local",
                         },
+                        headers,
                     )
                 name = str(data.get("name") or "").strip()
                 if not name:
@@ -2126,7 +2294,11 @@ class Handler(BaseHTTPRequestHandler):
                 else:
                     self.send(404, "not found", "text/plain; charset=utf-8")
             elif parsed.path == "/api/member/me":
-                self.send_json(200, member_payload(member) if member else {"ok": True, "authenticated": False, "guest": True, "member": {"name": "관심종목"}, "watchlist": [{"name": "삼성전자", "code": "005930"}, {"name": "SK하이닉스", "code": "000660"}, {"name": "현대차", "code": "005380"}]})
+                if member:
+                    self.send_json(200, member_payload(member))
+                else:
+                    payload, headers = guest_watchlist_payload(self)
+                    self.send_json(200, payload, headers=headers)
             elif parsed.path == "/api/hot":
                 force = "force=1" in self.path
                 self.send(200, json.dumps(hot_payload(force), ensure_ascii=False), "application/json; charset=utf-8")
