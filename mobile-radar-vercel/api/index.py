@@ -16,7 +16,7 @@ from datetime import datetime, timedelta, timezone
 from email.utils import parsedate_to_datetime
 from html import unescape
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
-from urllib.parse import parse_qs, quote_plus, urlparse
+from urllib.parse import parse_qs, parse_qsl, quote_plus, urlencode, urlparse, urlsplit, urlunsplit
 from urllib.request import Request, urlopen
 
 KST = timezone(timedelta(hours=9))
@@ -317,7 +317,7 @@ def supabase_request(method, path, payload=None, prefer=None):
 
 
 def supabase_postgres_url():
-    return (
+    raw = (
         os.environ.get("SUPABASE_POSTGRES_URL")
         or os.environ.get("SUPABASE_POSTGRES_PRISMA_URL")
         or os.environ.get("SUPABASE_POSTGRES_URL_NON_POOLING")
@@ -327,6 +327,15 @@ def supabase_postgres_url():
         or os.environ.get("STORAGE_POSTGRES_URL")
         or os.environ.get("STORAGE_DATABASE_URL")
     )
+    if not raw:
+        return None
+    try:
+        parts = urlsplit(raw)
+        allowed = {"sslmode", "connect_timeout", "application_name", "target_session_attrs"}
+        query = urlencode([(k, v) for k, v in parse_qsl(parts.query, keep_blank_values=True) if k in allowed])
+        return urlunsplit((parts.scheme, parts.netloc, parts.path, query, parts.fragment))
+    except Exception:
+        return raw
 
 
 def pg_connect():
