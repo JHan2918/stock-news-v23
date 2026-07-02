@@ -443,46 +443,6 @@ def pg_visit_counts(visitor_id, today):
         con.close()
 
 
-def db_status_payload():
-    env_keys = [
-        k
-        for k in sorted(os.environ.keys())
-        if any(token in k.upper() for token in ("SUPABASE", "POSTGRES", "STORAGE"))
-    ]
-    out = {
-        "ok": True,
-        "envKeys": env_keys,
-        "hasRestConfig": bool(supabase_config()[0] and supabase_config()[1]),
-        "hasPostgresUrl": bool(supabase_postgres_url()),
-        "pgImport": False,
-        "pgConnect": False,
-        "pgError": "",
-        "restCheck": False,
-        "restError": "",
-    }
-    try:
-        import psycopg  # noqa: F401
-
-        out["pgImport"] = True
-    except Exception as exc:
-        out["pgError"] = f"import: {type(exc).__name__}: {str(exc)[:160]}"
-    try:
-        con = pg_connect()
-        if con:
-            ensure_pg_schema(con)
-            con.close()
-            out["pgConnect"] = True
-    except Exception as exc:
-        out["pgError"] = f"connect: {type(exc).__name__}: {str(exc)[:200]}"
-    try:
-        rows = supabase_request("GET", "visitor_logs?select=device_id&limit=1")
-        if rows is not None:
-            out["restCheck"] = True
-    except Exception as exc:
-        out["restError"] = f"{type(exc).__name__}: {str(exc)[:200]}"
-    return out
-
-
 def get_or_create_device(handler):
     cookies = parse_cookie(handler.headers.get("Cookie", ""))
     device_id = cookies.get("mr_device") or cookies.get("mr_visitor") or secrets.token_urlsafe(18)
@@ -2516,8 +2476,6 @@ class Handler(BaseHTTPRequestHandler):
             elif parsed.path == "/api/visit":
                 payload, headers = visit_payload(self)
                 self.send_json(200, payload, headers=headers)
-            elif parsed.path == "/api/db-status":
-                self.send_json(200, db_status_payload())
             elif parsed.path == "/api/research-reports":
                 qs = parse_qs(parsed.query)
                 start = qs.get("start", [""])[0].strip()
